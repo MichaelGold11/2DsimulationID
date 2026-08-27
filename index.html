@@ -1,0 +1,1605 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The M-24 Cell</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira:wdth,wght@75..100,300..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  /* Committed single-theme design: a shop-floor control room. Dark graphite ground,
+     copper accent (the material in the crimp barrel), wire colors used functionally. */
+  :root{
+    --bg:#14161A; --bg2:#191C21; --panel:#1E2127; --panel2:#252932; --inset:#101216;
+    --line:#343943; --line2:#3F4552;
+    --ink:#EAE8E2; --muted:#9AA1AC; --faint:#6A717D;
+    --copper:#D98E4A; --copper-dim:#8A5F3A;
+    --pass:#5CBE79; --fail:#E25B5B; --warn:#E3B34F;
+    --blue:#5B8DD9; --violet:#9B7ED9; --teal:#4FB8C9; --grey:#98A0AC;
+    --mono:'IBM Plex Mono',ui-monospace,Consolas,monospace;
+    --sans:'Saira',system-ui,'Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;
+       line-height:1.5;overflow:hidden}
+  button{font-family:var(--sans);color:var(--ink);background:var(--panel2);
+         border:1px solid var(--line);border-radius:6px;padding:5px 12px;cursor:pointer;
+         font-size:13px}
+  button:hover{border-color:var(--line2);background:#2B3039}
+  button:focus-visible,.term:focus-visible{outline:2px solid var(--copper);outline-offset:2px}
+  button.on{background:var(--copper);border-color:var(--copper);color:#17130E;font-weight:600}
+  button.play{min-width:84px;font-weight:600}
+
+  #app{display:flex;flex-direction:column;height:100vh}
+
+  /* ---------- header ---------- */
+  header{display:flex;align-items:center;gap:12px;padding:8px 14px;background:var(--bg2);
+         border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .brand h1{font-size:19px;font-weight:700;letter-spacing:.02em;line-height:1.1}
+  .brand small{color:var(--muted);font-size:11.5px;display:block;margin-top:1px}
+  .brand em{color:var(--copper);font-style:normal}
+  .controls{display:flex;align-items:center;gap:8px}
+  .seg{display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .seg button{border:0;border-radius:0;padding:5px 10px;font-family:var(--mono);font-size:12px}
+  .seg button.on{background:var(--copper);color:#17130E}
+  .clock{font-family:var(--mono);font-size:15px;font-weight:600;background:var(--inset);
+         border:1px solid var(--line);border-radius:6px;padding:4px 10px;min-width:148px;
+         text-align:center;font-variant-numeric:tabular-nums}
+  .clock small{color:var(--muted);font-weight:400;font-size:11px}
+  .stats{display:flex;gap:8px;margin-left:auto}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:6px;
+        padding:3px 9px;text-align:center;min-width:62px}
+  .stat b{display:block;font-family:var(--mono);font-size:16px;font-weight:600;
+          font-variant-numeric:tabular-nums}
+  .stat span{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+  .stat b .of{color:var(--faint);font-size:12px}
+  #fpyV.good{color:var(--pass)} #fpyV.bad{color:var(--warn)} #escV{color:var(--fail)}
+
+  /* ---------- main ---------- */
+  main{flex:1;display:flex;min-height:0}
+  #floorWrap{flex:1;position:relative;min-width:0;overflow:hidden;background:
+    radial-gradient(1200px 700px at 50% 40%, #1A1D23 0%, var(--bg) 70%)}
+  #floor{width:100%;height:100%;display:block}
+
+  /* ---------- SVG pieces ---------- */
+  .st-body{fill:var(--panel);stroke:var(--line2);stroke-width:1.2;rx:8}
+  .station{cursor:pointer}
+  .station:hover .st-body{stroke:var(--copper)}
+  .station.sel .st-body{stroke:var(--copper);stroke-width:2}
+  .station.blocked .st-body{stroke:var(--warn)}
+  .st-num{font-family:var(--mono);font-size:15px;font-weight:600;fill:var(--copper)}
+  .st-name{font-family:var(--sans);font-size:13.5px;font-weight:600;fill:var(--ink)}
+  .st-cyc{font-family:var(--mono);font-size:10.5px;fill:var(--muted)}
+  .st-light{r:5}
+  .st-light.idle{fill:#4A505C}
+  .st-light.busy{fill:var(--pass)}
+  .st-light.blocked{fill:var(--warn)}
+  .st-light.fail{fill:var(--fail)}
+  .prog-bg{fill:var(--inset)} .prog-fg{fill:var(--copper)}
+  .flow-path{stroke:#2C313B;stroke-width:10;fill:none;stroke-linecap:round;stroke-linejoin:round}
+  .flow-arrow{fill:#3D4450}
+  .zone-label{font-family:var(--mono);font-size:10px;letter-spacing:.14em;fill:var(--faint);
+              text-transform:uppercase}
+  .fixture{fill:var(--panel2);stroke:var(--line);stroke-width:1;cursor:pointer}
+  .fixture-label{font-family:var(--mono);font-size:9.5px;fill:var(--muted);pointer-events:none}
+  .person{cursor:pointer}
+  .person circle.dot{stroke-width:2.5;fill:var(--bg2)}
+  .person.newhire circle.dot{stroke-dasharray:3 2.4}
+  .person text{font-family:var(--mono);font-size:8.5px;font-weight:600;fill:var(--ink);
+               text-anchor:middle;pointer-events:none}
+  .unit{cursor:pointer}
+  .unit rect{fill:var(--copper);stroke:#17130E;stroke-width:.8;rx:2}
+  .unit.queued rect{fill:var(--copper-dim)}
+  .unit.failed rect{fill:var(--fail)}
+  .unit.hidden-defect rect{stroke:var(--fail);stroke-width:2}
+  .unit.done rect{fill:var(--pass)}
+
+  /* data-layer mode */
+  .dl #floor .station.nodata .st-body{fill:#181A1F;stroke-dasharray:5 4;stroke:#3A3F49}
+  .dl #floor .station.nodata text{opacity:.42}
+  .dl #floor .station.hasdata .st-body{stroke:var(--teal);stroke-width:1.8}
+  .databadge{display:none}
+  .dl .databadge{display:block}
+  .databadge circle{fill:var(--teal);stroke:#0E2A30;stroke-width:1}
+  .databadge text{font-family:var(--mono);font-size:9px;font-weight:600;fill:#08181B;
+                  text-anchor:middle}
+  .nodata-tag{display:none;font-family:var(--mono);font-size:9px;fill:var(--warn);
+              letter-spacing:.08em}
+  .dl .nodata-tag{display:block}
+
+  /* ---------- tooltip ---------- */
+  #tip{position:absolute;pointer-events:none;background:#0D0F12;border:1px solid var(--line2);
+       border-radius:6px;padding:6px 10px;font-size:12px;max-width:240px;display:none;
+       z-index:30;box-shadow:0 6px 18px rgba(0,0,0,.5)}
+  #tip b{color:var(--copper)} #tip .m{color:var(--muted);font-family:var(--mono);font-size:11px}
+
+  /* ---------- inspector ---------- */
+  #inspector{width:390px;flex-shrink:0;background:var(--bg2);border-left:1px solid var(--line);
+             overflow-y:auto;padding:16px 18px 28px}
+  #inspector::-webkit-scrollbar{width:8px}
+  #inspector::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+  .eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;
+           color:var(--copper);margin-bottom:4px}
+  #inspector h2{font-size:19px;font-weight:700;line-height:1.15;margin-bottom:8px;
+                text-wrap:balance}
+  #inspector h3{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);
+                margin:16px 0 6px;font-weight:600}
+  #inspector p{color:#C9CDD4;margin-bottom:8px;font-size:13.5px}
+  #inspector ul{list-style:none;margin-bottom:8px}
+  #inspector li{padding:5px 0 5px 14px;position:relative;color:#C9CDD4;font-size:13px;
+                border-bottom:1px solid #23262D}
+  #inspector li:last-child{border-bottom:0}
+  #inspector li::before{content:'';position:absolute;left:0;top:12px;width:6px;height:2px;
+                        background:var(--copper)}
+  .kv{display:flex;justify-content:space-between;gap:10px;padding:5px 0;font-size:13px;
+      border-bottom:1px solid #23262D}
+  .kv span{color:var(--muted)} .kv b{font-family:var(--mono);font-weight:500;text-align:right}
+  .chip{display:inline-block;font-family:var(--mono);font-size:10.5px;padding:1px 8px;
+        border-radius:20px;border:1px solid var(--line2);color:var(--muted);margin:2px 3px 2px 0}
+  .chip.cap{color:var(--teal);border-color:#2A5A63}
+  .chip.inv{color:var(--warn);border-color:#5F4E28}
+  .chip.bad{color:var(--fail);border-color:#5F2E2E}
+  .chip.ok{color:var(--pass);border-color:#2E5A3C}
+  .term{border-bottom:1px dotted var(--copper);cursor:pointer;color:var(--ink)}
+  .term:hover{color:var(--copper)}
+  .linkrow{display:block;width:100%;text-align:left;margin-top:6px;background:var(--panel);
+           padding:8px 10px}
+  .harness-fig{background:var(--inset);border:1px solid var(--line);border-radius:8px;
+               padding:8px;margin:8px 0}
+  .harness-fig svg{width:100%;display:block}
+  .gillus{background:var(--inset);border:1px solid var(--line);border-radius:6px;
+          padding:6px 10px;margin:7px 0 2px}
+  .gillus svg{width:100%;max-height:88px;display:block}
+  .glink{display:inline-block;margin-top:5px;font-family:var(--mono);font-size:11px;
+         color:var(--teal);text-decoration:none;border-bottom:1px dotted var(--teal)}
+  .glink:hover{color:var(--ink);border-color:var(--ink)}
+  .buildlist li.todo{color:var(--faint)} .buildlist li.todo::before{background:var(--faint)}
+  .defect-flag{background:#2A1B1B;border:1px solid #5F2E2E;border-radius:6px;padding:8px 10px;
+               margin:6px 0;font-size:12.5px;color:#E8B9B9}
+  .note{background:#241F15;border:1px solid #5F4E28;border-radius:6px;padding:8px 10px;
+        margin:8px 0;font-size:12.5px;color:#E3CFA0}
+  .note b{color:var(--warn)}
+
+  /* ---------- event feed ---------- */
+  #feedWrap{border-top:1px solid var(--line);background:var(--bg2);padding:6px 18px 8px;
+            height:118px;display:flex;flex-direction:column}
+  #feedHead{display:flex;align-items:baseline;gap:14px;margin-bottom:3px}
+  #feedHead h4{font-size:10px;text-transform:uppercase;letter-spacing:.14em;color:var(--muted);
+               font-weight:600}
+  #feedHead .key{font-size:10.5px;color:var(--faint)}
+  #feedHead .key i{font-style:normal;font-family:var(--mono)}
+  #feedHead .key .c{color:var(--teal)} #feedHead .key .n{color:var(--warn)}
+  #feed{flex:1;overflow-y:auto;font-family:var(--mono);font-size:11.5px;line-height:1.75}
+  #feed::-webkit-scrollbar{width:8px}
+  #feed::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+  .ev{display:flex;gap:10px;white-space:nowrap}
+  .ev time{color:var(--faint);flex-shrink:0}
+  .ev .tag{flex-shrink:0;width:88px;font-size:10px;letter-spacing:.06em}
+  .ev.cap .tag{color:var(--teal)} .ev.inv .tag{color:var(--warn)}
+  .ev.cap.lag .tag{color:#7FA8AE}
+  .ev span.txt{color:#B9BEC7;overflow:hidden;text-overflow:ellipsis}
+  .ev.fail span.txt{color:#E09B9B}
+
+  /* ---------- glossary drawer ---------- */
+  #glossary{position:absolute;top:0;right:0;bottom:0;width:390px;background:var(--bg2);
+            border-left:1px solid var(--line);transform:translateX(102%);visibility:hidden;
+            transition:transform .25s ease,visibility 0s .25s;z-index:40;display:flex;
+            flex-direction:column;box-shadow:-12px 0 30px rgba(0,0,0,.45)}
+  @media (prefers-reduced-motion:reduce){#glossary{transition:none}}
+  #glossary.open{transform:none;visibility:visible;transition:transform .25s ease,visibility 0s 0s}
+  #glossary header{padding:12px 18px;display:flex;justify-content:space-between;
+                   align-items:center;border-bottom:1px solid var(--line);background:var(--bg2)}
+  #glossary header h2{font-size:16px}
+  #gsearch{width:calc(100% - 36px);margin:12px 18px 4px;background:var(--inset);
+           border:1px solid var(--line);border-radius:6px;color:var(--ink);padding:7px 10px;
+           font-family:var(--sans);font-size:13px}
+  #glist{overflow-y:auto;padding:8px 18px 24px}
+  .gentry{padding:9px 0;border-bottom:1px solid #23262D}
+  .gentry b{display:block;font-size:13.5px}
+  .gentry b small{color:var(--faint);font-weight:400;font-family:var(--mono);font-size:10px;
+                  margin-left:6px}
+  .gentry p{color:#B9BEC7;font-size:12.5px;margin-top:2px}
+  .gentry.hl{background:#241F15;margin:0 -10px;padding:9px 10px;border-radius:6px}
+
+  /* ---------- summary modal ---------- */
+  #summary{position:fixed;inset:0;z-index:60;display:none;align-items:center;
+           justify-content:center;padding:22px;background:rgba(9,10,13,.74)}
+  #summary.open{display:flex}
+  #sumPanel{background:var(--bg2);border:1px solid var(--line2);border-radius:12px;
+            width:min(960px,100%);max-height:100%;display:flex;flex-direction:column;
+            box-shadow:0 24px 80px rgba(0,0,0,.6)}
+  #sumHead{display:flex;justify-content:space-between;align-items:center;gap:12px;
+           padding:14px 22px;border-bottom:1px solid var(--line)}
+  #sumHead h2{font-size:18px;font-weight:700}
+  #sumBody{overflow-y:auto;padding:16px 22px 30px}
+  #sumBody::-webkit-scrollbar{width:8px}
+  #sumBody::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+  #sumBody h3{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);
+              margin:20px 0 8px;font-weight:600}
+  #sumBody h3:first-child{margin-top:2px}
+  #sumBody p{color:#C9CDD4;font-size:13px;margin-bottom:8px}
+  .sumgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px}
+  .sumcard{background:var(--panel);border:1px solid var(--line);border-radius:6px;
+           padding:6px 10px}
+  .sumcard b{display:block;font-family:var(--mono);font-size:17px;font-weight:600;
+             font-variant-numeric:tabular-nums}
+  .sumcard span{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+  .twrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+  .sumtable{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11.5px;
+            font-variant-numeric:tabular-nums;white-space:nowrap}
+  .sumtable th{font-family:var(--sans);font-size:10px;text-transform:uppercase;
+               letter-spacing:.07em;color:var(--muted);font-weight:600;text-align:right;
+               padding:7px 10px;border-bottom:1px solid var(--line2);background:var(--panel)}
+  .sumtable th:first-child,.sumtable td:first-child{text-align:left}
+  .sumtable td{padding:6px 10px;border-bottom:1px solid #23262D;color:#C9CDD4;text-align:right}
+  .sumtable tr:last-child td{border-bottom:0}
+  .sumtable tr.hot td{color:var(--warn)}
+  .sumtable td .chip{margin:0}
+
+  /* small screens */
+  @media (max-width:1100px){
+    #inspector{width:320px} #glossary{width:320px}
+    .stats .stat{min-width:64px}
+  }
+  @media (max-width:860px){
+    main{flex-direction:column}
+    #inspector{width:100%;max-height:38vh;border-left:0;border-top:1px solid var(--line)}
+    #glossary{width:min(390px,92vw)}
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <header>
+    <div class="brand">
+      <h1>The M-24 Cell</h1>
+      <small>U-shaped harness assembly · <em>The Invisible Assembly Line</em> · Appendix A, simulated</small>
+    </div>
+    <div class="controls">
+      <button id="playBtn" class="play">▶ Play</button>
+      <div class="seg" role="group" aria-label="Simulation speed">
+        <button data-spd="1" class="on">1×</button><button data-spd="3">3×</button><button data-spd="8">8×</button>
+      </div>
+      <button id="resetBtn" title="Restart the day">Reset</button>
+      <div class="clock"><span id="clockV">06:00</span> <small id="shiftV">· Shift 1</small></div>
+    </div>
+    <div class="controls">
+      <button id="dataBtn" title="Show where data is (and isn't) generated">Data layer</button>
+      <button id="xrayBtn" title="Plant view = only what today's data shows. Reality view also reveals hidden defects.">Reality view</button>
+      <button id="sumBtn" title="Everything observed so far — per station, per person, per defect">Summary</button>
+      <button id="glossBtn">Glossary</button>
+    </div>
+    <div class="stats">
+      <div class="stat"><b><span id="goodV">0</span><span class="of">/200</span></b><span>good units</span></div>
+      <div class="stat"><b id="fpyV">—</b><span>first-pass yield</span></div>
+      <div class="stat"><b id="wipV">0</b><span>wip on line</span></div>
+      <div class="stat"><b id="scrapV">0</b><span>scrapped</span></div>
+      <div class="stat"><b id="escV">0</b><span>escapes</span></div>
+    </div>
+  </header>
+
+  <main>
+    <div id="floorWrap">
+      <svg id="floor" viewBox="0 0 1080 690" role="img"
+           aria-label="Animated map of the U-shaped M-24 assembly cell"></svg>
+      <div id="tip"></div>
+      <div id="glossary" aria-label="Glossary">
+        <header><h2>Plain-English glossary</h2><button id="glossClose">Close</button></header>
+        <input id="gsearch" type="search" placeholder="Search a term… (crimp, takt, FPY)">
+        <div id="glist"></div>
+      </div>
+    </div>
+    <aside id="inspector" aria-live="polite"></aside>
+  </main>
+
+  <div id="summary" role="dialog" aria-modal="true" aria-label="Simulation summary">
+    <div id="sumPanel">
+      <div id="sumHead">
+        <div><div class="eyebrow">the record the plant never gets</div><h2 id="sumTitle">Live summary</h2></div>
+        <div style="display:flex;gap:8px"><button id="sumRefresh">Refresh</button><button id="sumClose">Close</button></div>
+      </div>
+      <div id="sumBody"></div>
+    </div>
+  </div>
+
+  <div id="feedWrap">
+    <div id="feedHead">
+      <h4>Live event feed</h4>
+      <span class="key"><i class="c">● captured</i> — lands in a system today &nbsp;·&nbsp;
+        <i class="n">● invisible</i> — happens on the floor, recorded nowhere. That gap is the case.</span>
+    </div>
+    <div id="feed"></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* =====================================================================
+   CASE DATA — everything below is transcribed from Appendix A
+   ===================================================================== */
+const T = (id, txt) => `<span class="term" tabindex="0" data-t="${id}">${txt}</span>`;
+
+const STATIONS = [
+ {n:1, name:'Wire cut & strip', cyc:[2.5,3.0], cycTxt:'2–3 min per kit (batched)',
+  x:40, y:96, side:'L',
+  what:`A semi-automatic machine cuts wires to length and ${T('strip','strips')} the insulation off each end, following the ${T('recipe','variant recipe')}. Wires for one harness are gathered into a ${T('kit','kit')} — this station works in ${T('batch','batches')}, feeding the rest of the line.`,
+  data:null, dataGap:'Cycle times, batch waits, machine micro-stops — none of it is recorded.'},
+ {n:2, name:'Crimp', cyc:[3,4], cycTxt:'3–4 min',
+  x:40, y:236, side:'L',
+  what:`A bench press ${T('crimp','crimps')} a metal ${T('terminal','terminal')} onto each stripped wire end — cold-forming the metal so it grips bare copper strands. The operator does periodic ${T('crimpheight','crimp-height checks')} with a micrometer, but results live on a paper check sheet at best.`,
+  data:null, dataGap:'Crimp-height checks are periodic and paper-based; per-wire outcomes are unknown.'},
+ {n:3, name:'Terminal insertion', cyc:[4,5], cycTxt:'4–5 min · the bottleneck',
+  x:40, y:376, side:'L',
+  what:`Each crimped terminal and its ${T('cavityseal','cavity seal')} is pushed into the right ${T('cavity','cavity')} of the ${T('connectorbody','connector body')} until it clicks. The click is <b>verified by feel</b> — a partially seated terminal can pass a tug test and still fail later. At 4–5 min this station runs over the 4-minute ${T('takt','takt')}: it is the cell's ${T('bottleneck','bottleneck')}.`,
+  data:null, dataGap:'No record of insertions, tug tests, or how long units queue here.'},
+ {n:4, name:'Routing & layout', cyc:[3,4], cycTxt:'3–4 min',
+  x:300, y:546, side:'B',
+  what:`Wires are laid onto a ${T('pinboard','pin board')} — a jig with pegs matching the harness drawing — and ${T('routing','routed')} into the branch shape the harness needs in the machine it will live in.`,
+  data:null, dataGap:'Adherence to the drawing and time-on-board are never measured.'},
+ {n:5, name:'Taping & clips', cyc:[3,4], cycTxt:'3–4 min',
+  x:560, y:546, side:'B',
+  what:`The routed bundle is wrapped with harness tape, and ${T('clip','retention clips')} and ${T('grommet','grommets')} are installed at marked positions so the harness can be fastened into the customer's equipment.`,
+  data:null, dataGap:'Missing clips leave no trace here — they surface (or don’t) two stations later.'},
+ {n:6, name:'Electrical test', cyc:[1.5,2], cycTxt:'1–2 min',
+  x:870, y:376, side:'R',
+  what:`The ${T('eol','end-of-line tester')} runs a ${T('continuity','continuity test')} on all 24 circuits plus a ${T('sealtest','seal test')}. Pass/fail and ${T('circuitcode','failed-circuit codes')} are logged <b>automatically</b> — the single richest data signal in the whole cell.`,
+  data:'End-of-line tester logs — timestamped pass/fail per unit with failed-circuit codes.', dataGap:null},
+ {n:7, name:'Visual inspection', cyc:[1.5,2], cycTxt:'1–2 min',
+  x:870, y:236, side:'R',
+  what:`The ${T('qualitytech','quality tech')} checks workmanship against quality criteria: tape coverage, clip positions, bend radii, label placement. Human eyes, human attention — some defect types escape here more than others.`,
+  data:'Feeds scrap tickets & rework tags — paper, keyed into the quality system days later.', dataGap:null},
+ {n:8, name:'Label & pack-out', cyc:[1,1.2], cycTxt:'~1 min',
+  x:870, y:96, side:'R',
+  what:`The ${T('variant','variant')} label is printed and applied, and the finished harness is boxed. A ${T('labelmismatchterm','label mismatch')} here is the one defect that usually isn't caught until the customer opens the box.`,
+  data:'Counts roll into the shift production report the line lead writes at end of shift.', dataGap:null},
+];
+
+const DEFECTS = {
+ badCrimp:{rank:1, name:'Bad crimps', at:2, code:'C-03 high resistance',
+  desc:'Wrong crimp height, missed strands, or insulation caught in the crimp barrel. The joint conducts poorly or fails mechanically.',
+  caught:'Mostly at electrical test (st 6) as a high-resistance / open circuit.'},
+ misSeat:{rank:2, name:'Mis-seated terminals', at:3, code:'S-01 seal fail',
+  desc:'Terminal only partially inserted. It passes the touch/tug check, then fails the seal test — or worse, vibrates loose months later in the field.',
+  caught:'Partially at the seal test (st 6); the rest escape to the customer.'},
+ wrongCavity:{rank:3, name:'Wrong-cavity / mis-routing', at:3, code:'C-12 wrong cavity',
+  desc:'A circuit lands in the wrong connector position, or the bundle is routed off-drawing.',
+  caught:'Reliably at electrical test (st 6) — the tester maps every circuit.'},
+ clipsTape:{rank:4, name:'Missing clips & tape', at:5, code:'visual only',
+  desc:'A retention clip missing or misplaced, or thin tape coverage. Electrically perfect, so the tester is blind to it.',
+  caught:'Only by visual inspection (st 7) — and it escapes there more often than the others.'},
+ labelMismatch:{rank:5, name:'Label mismatch', at:8, code:'found at customer',
+  desc:'Right harness, wrong variant label. Everything upstream was fine.',
+  caught:'Usually surfaces at the customer — the most expensive place to find anything.'},
+};
+// injection probability (base) and catch probabilities by check
+const DPROB = {badCrimp:.026, misSeat:.021, wrongCavity:.015, clipsTape:.012, labelMismatch:.006};
+const DCATCH = {badCrimp:{test:.92, vis:.25}, misSeat:{test:.55, vis:.10},
+                wrongCavity:{test:.96, vis:.15}, clipsTape:{test:0, vis:.55},
+                labelMismatch:{test:0, vis:0}};
+
+const DATASOURCES = [
+ {id:'tester', name:'End-of-line tester logs', where:'Station 6',
+  desc:'Timestamped pass/fail per unit with failed-circuit codes. Automatic, structured, trustworthy — the richest signal in the cell.'},
+ {id:'scrap', name:'Scrap tickets & rework tags', where:'Rework bench · paper',
+  desc:'Paper forms, filled out inconsistently, keyed into the quality system days later. The data exists, but late and lossy.'},
+ {id:'shift', name:'Shift production report', where:'Line lead desk',
+  desc:'Units made, downtime notes, headcount — written up by the line lead from memory at end of shift. One number for 480 minutes of activity.'},
+ {id:'holds', name:'Quality holds & customer complaints', where:'Plant-level system',
+  desc:'Tracked in a separate system at the plant level, disconnected from anything the cell records.'},
+ {id:'matrix', name:'Training matrix', where:'Office spreadsheet',
+  desc:'Who is signed off on which station. Updated monthly — often stale the week you need it.'},
+];
+const DATAGAPS = [
+ 'Station-level timing — nobody knows how long anything actually takes',
+ 'In-process signals between stations 1–5 — five stations, zero data',
+ 'Any linkage between operator training status and quality outcomes',
+];
+
+const GLOSSARY = [
+ ['harness','Wiring harness','the product','A bundle of wires, terminals and connectors built as one part, so a machine maker can install all its wiring in one go instead of wire-by-wire.'],
+ ['sealed','Sealed connector','the product','A connector with rubber seals on the body and on each wire, so moisture and dust can’t reach the electrical contacts. That’s why the M-24 gets a seal test, not just an electrical one.'],
+ ['circuit','Circuit (24-circuit)','the product','One electrical path = one wire from point A to point B. The M-24 has 24 of them — 24 wires, each of which must land in exactly the right position.'],
+ ['connectorbody','Connector body','the product','The plastic housing with numbered holes (cavities) that terminals lock into. It’s what plugs into the mating connector on the customer’s machine.'],
+ ['cavity','Cavity','the product','One numbered hole in the connector body. "Wrong-cavity insertion" = right wire, wrong hole.'],
+ ['cavityseal','Cavity seal','the product','A tiny rubber ring on the wire that plugs the cavity behind the terminal, keeping the connector waterproof.'],
+ ['terminal','Terminal','the product','The small metal contact crimped onto a wire end — the part that actually touches the mating connector’s contact.'],
+ ['grommet','Grommet','the product','A rubber ring protecting the bundle where it passes through a hole in sheet metal, so vibration doesn’t chew the insulation.'],
+ ['clip','Retention clip','the product','A plastic fastener taped into the bundle that snaps the harness onto the machine frame, so it doesn’t hang loose and rub.'],
+ ['variant','Variant / high mix','the product','One of ~a dozen versions of the M-24, differing in wire lengths, circuit counts and labels. "Medium volume, high mix" = decent quantities, but the line constantly switches versions.'],
+ ['strip','Wire strip','process','Removing a precise length of insulation from a wire end without nicking the copper strands underneath.'],
+ ['crimp','Crimp','process','Squeezing a metal terminal onto a bare wire end under high force, cold-welding it. Done right it’s gas-tight; done wrong it’s the cell’s #1 defect.'],
+ ['crimpheight','Crimp height','process','The measured height of a finished crimp — the standard proxy for whether the crimp gripped correctly. Checked here periodically with a hand micrometer.'],
+ ['recipe','Variant recipe','process','The parameter set (wire types, lengths, strip lengths) the cut machine loads for a specific variant.'],
+ ['kit','Kit / kitting','process','All the cut wires and parts for one unit, gathered together so downstream stations never hunt for material.'],
+ ['batch','Batch','process','Making several units’ worth of one step at once (how station 1 runs), instead of one piece at a time.'],
+ ['pinboard','Pin board','process','A flat board with pegs laid out to the harness drawing at full scale. Operators bend the wires around the pegs to give the harness its shape.'],
+ ['routing','Routing','process','Laying each wire along its designed path and branch points. Mis-routing puts a wire down the wrong branch.'],
+ ['continuity','Continuity test','process','The tester sends a signal down each of the 24 circuits and confirms it arrives at the right pin — catching opens, shorts, and swapped positions.'],
+ ['sealtest','Seal test','process','Pressurizes the connector and watches for leaks, verifying the cavity seals are seated. A mis-seated terminal usually shows up here.'],
+ ['eol','End-of-line tester','process','The automated test rig at station 6 — the only machine in the cell that writes its own data.'],
+ ['circuitcode','Failed-circuit code','process','The tester’s output naming which circuit failed and how (e.g. C-12 wrong cavity) — enough to point at the offending upstream station.'],
+ ['takt','Takt time','measurement','The drumbeat the customer sets: available production time ÷ customer demand. Here ≈ 4 min — one good harness must leave the cell every 4 minutes to keep up.'],
+ ['cycletime','Cycle time','measurement','How long one station takes to do its work on one unit. If any cycle time exceeds takt, the line can’t keep pace.'],
+ ['bottleneck','Bottleneck','measurement','The slowest step, which sets the whole line’s output. Here it’s station 3 (4–5 min vs a 4-min takt) — watch its queue grow.'],
+ ['fpy','First-pass yield (FPY)','measurement','Share of units that pass every check the first time, with no rework. The cell runs 92–96% depending on variant and crew experience.'],
+ ['wip','WIP','measurement','Work in process — units started but not finished, sitting on the line between stations.'],
+ ['ucell','U-shaped cell','measurement','Stations arranged in a U so operators stand inside, steps apart. Short walks, easy handoffs, and one person can cover several stations.'],
+ ['rework','Rework','quality','Fixing a failed unit and sending it back through test. It ships, but it burned extra time — and it no longer counts as first-pass.'],
+ ['scrap','Scrap','quality','A unit too far gone to fix, thrown away. Its cost includes every minute of work already in it.'],
+ ['escape','Escape','quality','A defect that gets past every check and reaches the customer — the most expensive kind, in money and trust.'],
+ ['qualityhold','Quality hold','quality','Impounding suspect finished stock until it’s re-checked, usually triggered by a complaint or a bad trend.'],
+ ['qualitytech','Quality tech','roles','The role that owns test and inspection (stations 6–7) and the paperwork they generate.'],
+ ['trainingmatrix','Training matrix','roles','The spreadsheet of who is signed off to run which station. Updated monthly — and never linked to quality outcomes. That missing link is one of the case’s three named gaps.'],
+ ['andon','Andon','tech','A light/signal system machines use to announce their own status. Automated lines have them; the people in this cell don’t.'],
+ ['plc','PLC','tech','Programmable logic controller — the industrial computer inside automated equipment that counts, times and reports everything it does. Manual stations have no PLC, which is exactly why they’re invisible.'],
+ ['mes','MES','tech','Manufacturing execution system — plant software tracking orders, counts and quality. Only as good as the data fed into it.'],
+ ['labelmismatchterm','Label mismatch','quality','Right harness, wrong variant label — a perfect product that fails at the customer because the box lies about what’s inside.'],
+];
+
+const VARIANTS = 'ABCDEFGHJKLM'.split('').map(c=>'M24-'+c);
+
+/* =====================================================================
+   ILLUSTRATIONS & REAL-WORLD LINKS
+   Schematic drawings in the sim's own style (the artifact page cannot
+   load remote images), plus links out to real photos / articles.
+   ===================================================================== */
+const IMG=q=>['real photos','https://www.google.com/search?udm=2&q='+q.replace(/ /g,'+')];
+const WIKI=(p,l)=>[l||'read more','https://en.wikipedia.org/wiki/'+p];
+const LINKS={
+ harness:IMG('automotive wire harness assembly'),
+ sealed:IMG('sealed automotive connector wire seals'),
+ circuit:IMG('24 pin sealed connector pinout'),
+ connectorbody:IMG('sealed connector housing cavities'),
+ cavity:IMG('connector cavity terminal insertion'),
+ cavityseal:IMG('wire cavity seal connector waterproof'),
+ terminal:IMG('crimp terminal electrical contact'),
+ grommet:IMG('wire harness rubber grommet'),
+ clip:IMG('wire harness retention clip fastener'),
+ variant:IMG('wire harness variants drawings'),
+ strip:IMG('wire cut and strip machine'),
+ crimp:WIKI('Crimp_(electrical)','read more on crimping'),
+ crimpheight:IMG('crimp height micrometer measurement'),
+ recipe:IMG('wire processing machine settings screen'),
+ kit:IMG('wire harness kitting tray'),
+ batch:IMG('cut wire batches production'),
+ pinboard:IMG('wire harness assembly board jig'),
+ routing:IMG('harness routing board full scale drawing'),
+ continuity:IMG('wire harness continuity tester'),
+ sealtest:IMG('connector air leak seal tester'),
+ eol:IMG('wire harness end of line test board'),
+ circuitcode:IMG('harness tester fail screen'),
+ takt:WIKI('Takt_time'),
+ cycletime:IMG('cycle time vs takt time chart'),
+ bottleneck:WIKI('Bottleneck_(production)'),
+ fpy:WIKI('First_pass_yield'),
+ wip:WIKI('Work_in_process'),
+ ucell:IMG('u shaped manufacturing cell layout'),
+ rework:IMG('electronics rework station'),
+ scrap:IMG('manufacturing scrap bin red'),
+ escape:IMG('quality escaped defect customer return'),
+ qualityhold:IMG('quality hold tag pallet'),
+ qualitytech:IMG('quality technician inspection bench'),
+ trainingmatrix:IMG('operator training skills matrix board'),
+ andon:WIKI('Andon_(manufacturing)'),
+ plc:WIKI('Programmable_logic_controller'),
+ mes:WIKI('Manufacturing_execution_system'),
+ labelmismatchterm:IMG('wire harness barcode label'),
+};
+const SV=(inner)=>`<svg viewBox="0 0 160 72" role="img">${inner}</svg>`;
+const ILLUS={
+ strip:SV(`<rect x="6" y="29" width="72" height="14" rx="7" fill="#5B8DD9"/><path d="M78 33 h44 M78 36 h50 M78 39 h44" stroke="#D98E4A" stroke-width="1.8"/><rect x="128" y="14" width="24" height="13" rx="6.5" fill="none" stroke="#5B8DD9" stroke-dasharray="3 2.4"/><path d="M118 27 l8 -8" stroke="#6A717D" stroke-width="1"/><text x="6" y="62" font-family="IBM Plex Mono" font-size="8" fill="#6A717D">insulation off, strands intact</text>`),
+ crimp:SV(`<rect x="4" y="28" width="22" height="16" rx="8" fill="#5B8DD9"/><path d="M26 33 h22 M26 36 h24 M26 39 h22" stroke="#D98E4A" stroke-width="1.6"/><path d="M50 26 h26 v20 h-26 z" fill="none" stroke="#D98E4A" stroke-width="3"/><path d="M63 6 v14 m-4 -5 l4 5 l4 -5 M63 66 v-14 m-4 5 l4 -5 l4 5" stroke="#9AA1AC" stroke-width="1.6" fill="none"/><rect x="76" y="30" width="42" height="12" rx="2" fill="#D98E4A"/><circle cx="108" cy="36" r="3.4" fill="#101216"/><text x="126" y="40" font-family="IBM Plex Mono" font-size="8" fill="#6A717D">press</text>`),
+ crimpheight:SV(`<path d="M50 26 h26 v20 h-26 z" fill="none" stroke="#D98E4A" stroke-width="3"/><path d="M63 10 v12 M63 62 v-12" stroke="#5CBE79" stroke-width="1.6"/><path d="M56 10 h14 M56 62 h14" stroke="#5CBE79" stroke-width="1.6"/><text x="86" y="40" font-family="IBM Plex Mono" font-size="9" fill="#5CBE79">CH ✓</text><text x="6" y="40" font-family="IBM Plex Mono" font-size="8" fill="#6A717D">gauge</text>`),
+ terminal:SV(`<rect x="14" y="28" width="36" height="16" rx="3" fill="none" stroke="#D98E4A" stroke-width="2.4"/><rect x="50" y="31" width="52" height="10" rx="2" fill="#D98E4A"/><path d="M102 31 l16 5 l-16 5 z" fill="#D98E4A"/><text x="14" y="60" font-family="IBM Plex Mono" font-size="8" fill="#6A717D">crimp barrel → contact blade</text>`),
+ connectorbody:SV(`<rect x="46" y="8" width="68" height="56" rx="7" fill="#2A2E36" stroke="#3F4552"/>${Array.from({length:12},(_,k)=>`<rect x="${58+(k%2)*24}" y="${14+Math.floor(k/2)*8}" width="16" height="5" rx="1" fill="#101216" stroke="#3F4552" stroke-width=".5"/>`).join('')}`),
+ cavity:SV(`${Array.from({length:9},(_,k)=>`<rect x="${34+(k%3)*32}" y="${10+Math.floor(k/3)*18}" width="24" height="12" rx="2" fill="#101216" stroke="#3F4552"/>`).join('')}<rect x="66" y="28" width="24" height="12" rx="2" fill="#101216" stroke="#D98E4A" stroke-width="1.6"/><text x="98" y="62" font-family="IBM Plex Mono" font-size="8" fill="#6A717D">one cavity</text>`),
+ cavityseal:SV(`<rect x="10" y="10" width="34" height="52" rx="5" fill="#2A2E36" stroke="#3F4552"/><rect x="44" y="30" width="10" height="12" rx="2" fill="#101216" stroke="#3F4552"/><ellipse cx="58" cy="36" rx="5" ry="9" fill="none" stroke="#5B8DD9" stroke-width="3.4"/><path d="M64 36 h60" stroke="#E3B34F" stroke-width="4"/><text x="72" y="18" font-family="IBM Plex Mono" font-size="8" fill="#5B8DD9">rubber seal on the wire</text>`),
+ sealed:SV(`<rect x="52" y="14" width="56" height="44" rx="6" fill="#2A2E36" stroke="#3F4552"/><rect x="58" y="20" width="44" height="32" rx="4" fill="none" stroke="#5B8DD9" stroke-width="2" stroke-dasharray="4 3"/><path d="M30 22 q4 8 -2 10 q-6 -2 -2 -10 z M132 40 q4 8 -2 10 q-6 -2 -2 -10 z" fill="#5B8DD9" opacity=".8"/><path d="M34 34 q8 4 14 2 M128 30 q-8 -4 -14 -2" stroke="#6A717D" stroke-width="1" fill="none"/><text x="46" y="68" font-family="IBM Plex Mono" font-size="8" fill="#6A717D">moisture stays out</text>`),
+ harness:SV(`<rect x="8" y="24" width="20" height="26" rx="3" fill="#2A2E36" stroke="#3F4552"/><path d="M28 30 C 44 30 48 36 60 37 M28 37 h32 M28 44 C 44 44 48 38 60 37" stroke="#E3B34F" stroke-width="2" fill="none"/><rect x="60" y="32" width="48" height="10" rx="5" fill="#101216" stroke="#3F4552"/><path d="M108 37 L128 24 M108 37 L128 50" stroke="#EAE8E2" stroke-width="3"/><path d="M86 32 v-8 m-4 0 h8" stroke="#5CBE79" stroke-width="2"/><circle cx="132" cy="24" r="3" fill="#D98E4A"/><circle cx="132" cy="50" r="3" fill="#D98E4A"/>`),
+ circuit:SV(`<rect x="8" y="12" width="18" height="48" rx="3" fill="#2A2E36" stroke="#3F4552"/><rect x="134" y="12" width="18" height="48" rx="3" fill="#2A2E36" stroke="#3F4552"/>${[0,1,2,3,4].map(k=>`<path d="M26 ${18+k*9} H134" stroke="${k===2?'#D98E4A':'#3F4552'}" stroke-width="${k===2?2.4:1.4}"/>`).join('')}<text x="60" y="66" font-family="IBM Plex Mono" font-size="8" fill="#6A717D">1 wire = 1 circuit</text>`),
+ grommet:SV(`<path d="M80 4 v64" stroke="#3F4552" stroke-width="6"/><ellipse cx="80" cy="36" rx="9" ry="16" fill="#14161A" stroke="#4A505C" stroke-width="5"/><path d="M20 36 h49 M91 36 h49" stroke="#101216" stroke-width="9"/><path d="M20 36 h49 M91 36 h49" stroke="#E3B34F" stroke-width="2"/><text x="96" y="14" font-family="IBM Plex Mono" font-size="8" fill="#6A717D">through sheet metal</text>`),
+ clip:SV(`<rect x="16" y="20" width="128" height="11" rx="5.5" fill="#101216" stroke="#3F4552"/><path d="M80 31 v12 m-8 0 h16 m-8 0 l-5 8 h10 z" stroke="#9AA1AC" stroke-width="2.4" fill="none"/><path d="M20 58 h120" stroke="#3F4552" stroke-width="3"/><text x="94" y="50" font-family="IBM Plex Mono" font-size="8" fill="#6A717D">snaps into frame</text>`),
+ variant:SV(`${[['A',16,50],['B',36,84],['C',56,118]].map(([v,y,len])=>`<path d="M14 ${y} h${len}" stroke="#E3B34F" stroke-width="4"/><rect x="4" y="${+y-5}" width="10" height="10" rx="2" fill="#2A2E36" stroke="#3F4552"/><text x="${+len+20}" y="${+y+3}" font-family="IBM Plex Mono" font-size="8" fill="#9AA1AC">M24-${v}</text>`).join('')}`),
+ recipe:SV(`<rect x="30" y="6" width="70" height="60" rx="4" fill="#1E2127" stroke="#3F4552"/><text x="38" y="20" font-family="IBM Plex Mono" font-size="8" fill="#D98E4A">M24-C</text><text x="38" y="33" font-family="IBM Plex Mono" font-size="7.5" fill="#9AA1AC">wire 1: 450mm</text><text x="38" y="44" font-family="IBM Plex Mono" font-size="7.5" fill="#9AA1AC">wire 2: 380mm</text><text x="38" y="55" font-family="IBM Plex Mono" font-size="7.5" fill="#9AA1AC">strip: 4.5mm</text><path d="M104 36 h24 m-6 -5 l6 5 l-6 5" stroke="#5CBE79" stroke-width="1.6" fill="none"/>`),
+ kit:SV(`<rect x="24" y="18" width="112" height="42" rx="5" fill="none" stroke="#3F4552" stroke-width="2"/>${['#E25B5B','#E3B34F','#5B8DD9','#5CBE79'].map((c,k)=>`<path d="M${38+k*26} 52 q6 -22 12 0" stroke="${c}" stroke-width="3" fill="none"/>`).join('')}<rect x="24" y="8" width="34" height="12" rx="2" fill="#EAE8E2"/><text x="28" y="17" font-family="IBM Plex Mono" font-size="7.5" fill="#14161A">KIT #12</text>`),
+ batch:SV(`${[0,1,2].map(k=>`<rect x="${18+k*14}" y="${34-k*10}" width="80" height="30" rx="4" fill="#1E2127" stroke="#3F4552"/>`).join('')}<text x="118" y="40" font-family="IBM Plex Mono" font-size="8" fill="#6A717D">many at</text><text x="118" y="51" font-family="IBM Plex Mono" font-size="8" fill="#6A717D">once</text>`),
+ pinboard:SV(`<rect x="10" y="8" width="140" height="56" rx="4" fill="#1B1E24" stroke="#3F4552"/>${[[34,22],[70,18],[112,24],[46,50],[92,48],[128,44]].map(([x,y])=>`<circle cx="${x}" cy="${y}" r="3.4" fill="none" stroke="#6A717D" stroke-width="2"/>`).join('')}<path d="M18 34 Q34 18 70 22 Q100 26 112 28 M70 22 Q60 44 46 46 M112 28 Q124 38 128 40" stroke="#D98E4A" stroke-width="2.4" fill="none"/>`),
+ routing:SV(`<path d="M8 36 h56" stroke="#E3B34F" stroke-width="4"/><path d="M64 36 Q84 36 100 20 L136 14 M64 36 Q84 36 100 52 L136 58" stroke="#E3B34F" stroke-width="3" fill="none"/><circle cx="64" cy="36" r="4" fill="none" stroke="#6A717D" stroke-width="2"/><text x="104" y="40" font-family="IBM Plex Mono" font-size="8" fill="#6A717D">branch pts</text>`),
+ continuity:SV(`<rect x="8" y="22" width="24" height="30" rx="3" fill="#2A2E36" stroke="#3F4552"/><rect x="122" y="14" width="32" height="44" rx="4" fill="#1E2127" stroke="#3F4552"/><path d="M32 30 H122 M32 44 H122" stroke="#3F4552" stroke-width="1.4"/><path d="M32 37 H122" stroke="#5CBE79" stroke-width="2" stroke-dasharray="6 4"/><text x="128" y="40" font-family="IBM Plex Mono" font-size="10" fill="#5CBE79">✓</text><text x="40" y="62" font-family="IBM Plex Mono" font-size="8" fill="#6A717D">signal reaches right pin</text>`),
+ sealtest:SV(`<rect x="50" y="16" width="60" height="40" rx="6" fill="none" stroke="#4FB8C9" stroke-width="2" stroke-dasharray="5 3"/><rect x="66" y="26" width="28" height="20" rx="3" fill="#2A2E36" stroke="#3F4552"/><path d="M40 36 h8 m64 0 h8 M80 6 v8 M80 66 v-8" stroke="#4FB8C9" stroke-width="2"/><text x="116" y="20" font-family="IBM Plex Mono" font-size="8" fill="#4FB8C9">pressure</text>`),
+ eol:SV(`<rect x="86" y="10" width="62" height="52" rx="5" fill="#1E2127" stroke="#3F4552"/><rect x="94" y="18" width="46" height="22" rx="2" fill="#101216"/><path d="M98 30 l8 -6 l7 8 l8 -10 l7 6 l8 -4" stroke="#5CBE79" stroke-width="1.6" fill="none"/><text x="94" y="56" font-family="IBM Plex Mono" font-size="7.5" fill="#5CBE79">PASS · logged</text><rect x="12" y="28" width="22" height="24" rx="3" fill="#2A2E36" stroke="#3F4552"/><path d="M34 34 h52 M34 46 h52" stroke="#D98E4A" stroke-width="1.6"/>`),
+ circuitcode:SV(`<rect x="30" y="8" width="100" height="56" rx="4" fill="#101216" stroke="#3F4552"/><text x="40" y="26" font-family="IBM Plex Mono" font-size="9" fill="#E25B5B">✗ C-12 wrong cavity</text><text x="40" y="42" font-family="IBM Plex Mono" font-size="8" fill="#9AA1AC">unit #204 · 09:41:07</text><text x="40" y="56" font-family="IBM Plex Mono" font-size="8" fill="#6A717D">→ points upstream</text>`),
+ takt:SV(`<circle cx="40" cy="36" r="26" fill="none" stroke="#4A505C" stroke-width="3"/><path d="M40 36 L40 16 M40 36 L54 46" stroke="#D98E4A" stroke-width="3"/><text x="80" y="30" font-family="IBM Plex Mono" font-size="11" fill="#EAE8E2">≈ 4:00</text><text x="80" y="48" font-family="IBM Plex Mono" font-size="8" fill="#6A717D">one unit out, every</text><text x="80" y="59" font-family="IBM Plex Mono" font-size="8" fill="#6A717D">4 min, to keep pace</text>`),
+ cycletime:SV(`${[['S2',34,'#5CBE79'],['S3',52,'#E25B5B'],['S4',38,'#5CBE79']].map(([n,w,c],k)=>`<text x="8" y="${20+k*18}" font-family="IBM Plex Mono" font-size="8" fill="#9AA1AC">${n}</text><rect x="28" y="${12+k*18}" width="${w*2}" height="10" rx="2" fill="${c}" opacity=".85"/>`).join('')}<path d="M108 6 v60" stroke="#D98E4A" stroke-width="1.6" stroke-dasharray="4 3"/><text x="114" y="14" font-family="IBM Plex Mono" font-size="8" fill="#D98E4A">takt</text>`),
+ bottleneck:SV(`<path d="M30 10 L70 30 L70 42 L30 62 M130 10 L90 30 L90 42 L130 62" stroke="#4A505C" stroke-width="2.4" fill="none"/>${[0,1,2,3,4].map(k=>`<circle cx="${16+ (k%2)*11}" cy="${16+k*9}" r="4" fill="#D98E4A"/>`).join('')}<circle cx="80" cy="36" r="4" fill="#D98E4A"/><circle cx="112" cy="36" r="4" fill="#8A5F3A"/><circle cx="140" cy="36" r="4" fill="#8A5F3A"/>`),
+ fpy:SV(`${Array.from({length:10},(_,k)=>`<rect x="${8+k*15}" y="26" width="11" height="11" rx="2" fill="${k===6?'#E25B5B':'#5CBE79'}"/>`).join('')}<text x="8" y="56" font-family="IBM Plex Mono" font-size="8" fill="#6A717D">9 of 10 clean first try = 90% FPY</text>`),
+ wip:SV(`${[0,1,2].map(k=>`<rect x="${10+k*54}" y="24" width="30" height="24" rx="3" fill="#1E2127" stroke="#3F4552"/>`).join('')}${[[44,36],[52,36],[98,36],[106,36],[114,36]].map(([x,y])=>`<rect x="${x}" y="${y-3}" width="6" height="6" rx="1" fill="#D98E4A"/>`).join('')}<text x="10" y="64" font-family="IBM Plex Mono" font-size="8" fill="#6A717D">started, not finished</text>`),
+ ucell:SV(`${[[12,8],[12,28],[12,48],[52,52],[92,52],[132,48],[132,28],[132,8]].map(([x,y],k)=>`<rect x="${x}" y="${y}" width="18" height="12" rx="2" fill="#1E2127" stroke="${k===2?'#D98E4A':'#3F4552'}"/>`).join('')}<circle cx="60" cy="30" r="4" fill="none" stroke="#5B8DD9" stroke-width="2"/><circle cx="90" cy="30" r="4" fill="none" stroke="#5B8DD9" stroke-width="2"/><text x="52" y="16" font-family="IBM Plex Mono" font-size="8" fill="#6A717D">ops inside</text>`),
+ rework:SV(`<rect x="66" y="26" width="20" height="20" rx="3" fill="#D98E4A"/><path d="M100 36 a26 26 0 1 1 -8 -19" stroke="#E3B34F" stroke-width="2.4" fill="none"/><path d="M92 10 l2 8 l-9 1 z" fill="#E3B34F"/><text x="108" y="40" font-family="IBM Plex Mono" font-size="8" fill="#6A717D">fix, retest</text>`),
+ scrap:SV(`<path d="M56 22 h48 l-5 40 h-38 z" fill="none" stroke="#4A505C" stroke-width="2.6"/><path d="M50 22 h60" stroke="#4A505C" stroke-width="2.6"/><rect x="70" y="32" width="14" height="14" rx="2" fill="#8A5F3A"/><text x="90" y="46" font-family="IBM Plex Mono" font-size="12" fill="#E25B5B">✗</text>`),
+ escape:SV(`<circle cx="52" cy="34" r="18" fill="none" stroke="#9AA1AC" stroke-width="3"/><path d="M65 47 l12 12" stroke="#9AA1AC" stroke-width="4"/><rect x="104" y="28" width="16" height="12" rx="2" fill="#D98E4A" stroke="#E25B5B" stroke-width="2"/><path d="M124 34 h24 m-6 -4 l6 4 l-6 4" stroke="#E25B5B" stroke-width="1.8" fill="none"/><text x="98" y="58" font-family="IBM Plex Mono" font-size="8" fill="#E25B5B">to customer</text>`),
+ qualityhold:SV(`${[0,1,2].map(k=>`<rect x="${34+k*32}" y="30" width="26" height="22" rx="2" fill="#1E2127" stroke="#3F4552"/>`).join('')}<rect x="26" y="36" width="110" height="9" fill="#E3B34F" opacity=".92"/><text x="52" y="43.5" font-family="IBM Plex Mono" font-size="7.5" fill="#17130E">HOLD · DO NOT SHIP</text>`),
+ trainingmatrix:SV(`${Array.from({length:15},(_,k)=>{const r=Math.floor(k/5),c=k%5;const ok=[1,1,1,0,0, 1,1,0,0,0, 1,1,1,1,0][k];return `<rect x="${34+c*22}" y="${10+r*18}" width="18" height="14" rx="2" fill="#1E2127" stroke="#3F4552"/><text x="${39+c*22}" y="${21+r*18}" font-family="IBM Plex Mono" font-size="9" fill="${ok?'#5CBE79':'#4A505C'}">${ok?'✓':'—'}</text>`}).join('')}<text x="6" y="21" font-family="IBM Plex Mono" font-size="7.5" fill="#9AA1AC">OP4</text><text x="6" y="39" font-family="IBM Plex Mono" font-size="7.5" fill="#D98E4A">OP5</text><text x="6" y="57" font-family="IBM Plex Mono" font-size="7.5" fill="#9AA1AC">OP6</text>`),
+ andon:SV(`<rect x="72" y="42" width="6" height="24" fill="#3F4552"/><rect x="64" y="8" width="22" height="34" rx="4" fill="#101216" stroke="#3F4552"/><circle cx="75" cy="16" r="4.6" fill="#E25B5B"/><circle cx="75" cy="26" r="4.6" fill="#E3B34F"/><circle cx="75" cy="36" r="4.6" fill="#5CBE79" opacity=".5"/><text x="96" y="30" font-family="IBM Plex Mono" font-size="8" fill="#6A717D">machine says</text><text x="96" y="41" font-family="IBM Plex Mono" font-size="8" fill="#6A717D">"help me"</text>`),
+ plc:SV(`<rect x="52" y="16" width="56" height="40" rx="4" fill="#1E2127" stroke="#3F4552"/>${[0,1,2,3,4].map(k=>`<path d="M${60+k*10} 16 v-8 M${60+k*10} 56 v8" stroke="#6A717D" stroke-width="2"/>`).join('')}<text x="62" y="40" font-family="IBM Plex Mono" font-size="9" fill="#4FB8C9">PLC</text><text x="112" y="40" font-family="IBM Plex Mono" font-size="8" fill="#6A717D">counts all</text>`),
+ mes:SV(`<rect x="40" y="10" width="80" height="46" rx="4" fill="#1E2127" stroke="#3F4552"/><path d="M48 24 h64 M48 34 h64 M48 44 h64 M72 16 v36 M96 16 v36" stroke="#343943" stroke-width="1.2"/><path d="M74 56 v8 h12 v-8" fill="#3F4552"/><text x="46" y="21" font-family="IBM Plex Mono" font-size="7" fill="#9AA1AC">orders · counts · quality</text>`),
+ labelmismatchterm:SV(`<rect x="18" y="24" width="52" height="24" rx="3" fill="#EAE8E2"/><text x="26" y="40" font-family="IBM Plex Mono" font-size="9" fill="#14161A">M24-A</text><text x="78" y="42" font-family="IBM Plex Mono" font-size="14" fill="#E25B5B">≠</text><rect x="94" y="24" width="52" height="24" rx="3" fill="#2A2E36" stroke="#3F4552"/><text x="102" y="40" font-family="IBM Plex Mono" font-size="9" fill="#E3B34F">M24-C</text>`),
+ inspect:SV(`<rect x="8" y="30" width="70" height="11" rx="5.5" fill="#101216" stroke="#3F4552"/><path d="M40 30 v-8 m-4 0 h8" stroke="#5CBE79" stroke-width="2"/><circle cx="96" cy="34" r="16" fill="none" stroke="#9AA1AC" stroke-width="3"/><path d="M107 45 l12 12" stroke="#9AA1AC" stroke-width="4"/><text x="120" y="30" font-family="IBM Plex Mono" font-size="8" fill="#6A717D">human</text><text x="120" y="41" font-family="IBM Plex Mono" font-size="8" fill="#6A717D">eyes</text>`),
+ packout:SV(`<path d="M40 30 l24 -12 l24 12 v24 l-24 12 l-24 -12 z M40 30 l24 12 l24 -12 M64 42 v24" stroke="#4A505C" stroke-width="2.2" fill="none"/><rect x="96" y="18" width="46" height="18" rx="2" fill="#EAE8E2"/><text x="102" y="30" font-family="IBM Plex Mono" font-size="8" fill="#14161A">M24-A ▮▮▮</text>`),
+};
+// station index → illustration + real-world link
+const SILL=['strip','crimp','cavityseal','pinboard','clip','eol','inspect','packout'];
+const SLINK=[
+ IMG('automatic wire cut and strip machine'),
+ IMG('bench terminal crimping press'),
+ IMG('connector terminal insertion assembly'),
+ IMG('wire harness assembly pin board'),
+ IMG('harness taping retention clips install'),
+ IMG('wire harness electrical test fixture'),
+ IMG('wire harness visual inspection'),
+ IMG('wire harness label packing'),
+];
+
+/* ---------- the finished product, drawn with callouts (space 430×190) ---------- */
+const PRODUCT_ART=(()=>{
+  const W=['#E25B5B','#E3B34F','#5B8DD9','#5CBE79','#EAE8E2','#9B7ED9'];
+  let s='';
+  // connector body + cavities
+  s+=`<rect x="14" y="60" width="52" height="80" rx="6" fill="#2A2E36" stroke="#3F4552"/>`;
+  for(let r=0;r<12;r++)for(let c=0;c<2;c++)
+    s+=`<rect x="${21+c*15}" y="${65+r*5.9}" width="11" height="4" rx="1" fill="#101216" stroke="#3F4552" stroke-width=".4"/>`;
+  // wires with cavity seals, converging into the trunk
+  W.forEach((c,i)=>{const y=65+i*12;
+    s+=`<circle cx="68" cy="${y}" r="2.6" fill="none" stroke="#5B8DD9" stroke-width="1.8"/>`;
+    s+=`<path d="M71 ${y} C 110 ${y}, 120 95, 158 95" stroke="${c}" stroke-width="2.6" fill="none"/>`;});
+  // taped trunk
+  s+=`<rect x="156" y="89" width="142" height="13" rx="6.5" fill="#14161A" stroke="#3F4552"/>`;
+  for(const x of [168,194,246,272]) s+=`<rect x="${x}" y="87" width="13" height="17" rx="2" fill="#23262E" stroke="#343943" stroke-width=".8"/>`;
+  // variant label flag
+  s+=`<path d="M186 89 v-22" stroke="#6A717D" stroke-width="1"/><rect x="168" y="50" width="46" height="17" rx="2" fill="#EAE8E2"/><text x="175" y="62" font-family="IBM Plex Mono" font-size="9" fill="#14161A">M24-A</text>`;
+  // grommet & clip
+  s+=`<ellipse cx="228" cy="95.5" rx="6" ry="12" fill="none" stroke="#4A505C" stroke-width="4.6"/>`;
+  s+=`<path d="M262 102 v11 m-7 0 h14 m-7 0 l-4 7 h8 z" stroke="#9AA1AC" stroke-width="2" fill="none"/>`;
+  // breakouts
+  s+=`<path d="M298 92 C 330 88 340 62 366 58 M298 95 C 332 95 342 128 366 132" stroke="#14161A" stroke-width="7" fill="none"/>`;
+  s+=`<path d="M298 92 C 330 88 340 62 366 58 M298 95 C 332 95 342 128 366 132" stroke="#3F4552" stroke-width="7" fill="none" stroke-dasharray="1 0" opacity=".35"/>`;
+  [[366,58,-1],[366,132,1]].forEach(([bx,by,dir],bi)=>{
+    const cols=bi?W.slice(3):W.slice(0,3);
+    cols.forEach((c,i)=>{const ey=by+(i-1)*9*1;
+      s+=`<path d="M${bx} ${by} C ${bx+10} ${by}, ${bx+12} ${ey}, ${bx+22} ${ey}" stroke="${c}" stroke-width="2.4" fill="none"/>`;
+      s+=`<rect x="${bx+22}" y="${ey-2.4}" width="9" height="4.8" rx="1" fill="#D98E4A"/>`;});
+  });
+  // callouts
+  const lbl=(x,y,t,anchor)=>`<text x="${x}" y="${y}" font-family="IBM Plex Mono" font-size="9.5" fill="#9AA1AC" ${anchor?`text-anchor="${anchor}"`:''}>${t}</text>`;
+  const lead=(x1,y1,x2,y2)=>`<path d="M${x1} ${y1} L${x2} ${y2}" stroke="#4A505C" stroke-width="1"/>`;
+  s+=lbl(14,34,'sealed connector body · 24 cavities')+lead(40,38,40,58);
+  s+=lbl(96,22,'24 circuits (6 drawn)')+lead(110,26,98,62);
+  s+=lbl(222,34,'variant label',)+lead(230,38,214,52);
+  s+=lbl(316,26,'breakouts')+lead(330,30,330,80);
+  s+=lbl(14,180,'cavity seals')+lead(48,170,66,130);
+  s+=lbl(128,180,'harness tape')+lead(168,170,175,105);
+  s+=lbl(216,180,'grommet',)+lead(230,170,228,109);
+  s+=lbl(268,158,'retention clip')+lead(272,148,263,122);
+  s+=lbl(428,180,'crimped terminals','end')+lead(400,170,394,140);
+  return s;
+})();
+function productSVG(){ return `<svg viewBox="0 0 430 190">${PRODUCT_ART}</svg>`; }
+
+/* =====================================================================
+   GEOMETRY
+   ===================================================================== */
+const SW=170, SH=92;
+const PORT = s => { // input & output points per station for unit travel
+  const cx=s.x+SW/2, cy=s.y+SH/2;
+  if(s.side==='L') return {in:{x:cx,y:s.y-8}, out:{x:cx,y:s.y+SH+8}};
+  if(s.side==='B') return {in:{x:s.x-10,y:cy}, out:{x:s.x+SW+10,y:cy}};
+  return {in:{x:cx,y:s.y+SH+8}, out:{x:cx,y:s.y-8}};
+};
+const ROUTES = []; // waypoints from station i to i+1
+{
+  const P = STATIONS.map(PORT);
+  ROUTES.push([P[0].out,P[1].in]);
+  ROUTES.push([P[1].out,P[2].in]);
+  ROUTES.push([P[2].out,{x:125,y:592},P[3].in]);
+  ROUTES.push([P[3].out,P[4].in]);
+  ROUTES.push([P[4].out,{x:955,y:592},P[5].in]);
+  ROUTES.push([P[5].out,P[6].in]);
+  ROUTES.push([P[6].out,P[7].in]);
+  ROUTES.push([P[7].out,{x:955,y:34}]); // ship out
+}
+const BENCH={x:462,y:266,w:156,h:64}; // rework bench (center of U)
+const DESK={x:436,y:120,w:120,h:48};  // line lead desk
+
+/* =====================================================================
+   PEOPLE
+   ===================================================================== */
+const OP_ANCHOR = i => { // where an operator stands for station index i (inside the U)
+  const s=STATIONS[i];
+  if(s.side==='L') return {x:s.x+SW+26,y:s.y+SH/2};
+  if(s.side==='B') return {x:s.x+SW/2,y:s.y-26};
+  return {x:s.x-26,y:s.y+SH/2};
+};
+const ROLES = {
+ operator:{color:'var(--blue)', hex:'#5B8DD9', title:'Operator'},
+ lead:{color:'var(--warn)', hex:'#E3B34F', title:'Line lead'},
+ qtech:{color:'var(--pass)', hex:'#5CBE79', title:'Quality tech'},
+ trainer:{color:'var(--violet)', hex:'#9B7ED9', title:'Trainer'},
+ supervisor:{color:'var(--grey)', hex:'#98A0AC', title:'Supervisor'},
+ engineer:{color:'var(--teal)', hex:'#4FB8C9', title:'Manufacturing engineer'},
+};
+const ROLECARDS = {
+ operator:{who:'Runs stations 1–5 (rotating) plus label & pack-out. Follows standard work, does the periodic checks, flags problems to the line lead.',
+  produces:'Almost nothing that lands in a system. Their pace, waits, struggles and workarounds are the invisible middle of this line.',
+  gap:'Rotation isn’t logged, so nobody can connect who ran a station to what the tester found an hour later.'},
+ lead:{who:'Working supervisor of the cell: rebalances people when a queue grows, chases missing kits — and writes the shift production report at end of shift.',
+  produces:'The shift report: units, downtime notes, headcount. One retrospective summary for 480 minutes of activity.',
+  gap:'Everything they noticed and fixed during the shift lives only in their head.'},
+ qtech:{who:'Owns test and inspection (stations 6–7): runs the tester, does the workmanship check, writes scrap tickets and rework tags.',
+  produces:'Tester logs (automatic, rich) and paper scrap/rework tags (inconsistent, keyed in days later).',
+  gap:'Their paper tags are the only record of rework — and they arrive in the quality system too late to steer the line.'},
+ trainer:{who:'Trains and signs off new operators, station by station, then updates the training matrix.',
+  produces:'The training matrix — a spreadsheet updated monthly.',
+  gap:'Training status is never linked to quality outcomes. Is the new hire’s station producing more defects? Today, nobody can answer.'},
+ supervisor:{who:'Responsible for two cells — so they’re here half the time at most. Walks the line, checks pace against target, handles escalations.',
+  produces:'Nothing directly; consumes the shift report and quality-system data, both after the fact.',
+  gap:'Decides staffing with no utilization data — "empty workstations, and complaints there aren’t enough people. Both real."'},
+ engineer:{who:'Shared across the whole plant. Shows up when something breaks a rule badly enough: a quality hold, a recurring tester code, a process change.',
+  produces:'Process documentation and fixes — driven by whichever signal managed to reach them.',
+  gap:'With no in-process data from stations 1–5, they debug the line by interview and stopwatch.'},
+};
+
+/* =====================================================================
+   SIM STATE
+   ===================================================================== */
+let people=[], units=[], stations=[], bench=[], feed=[], track=null;
+let simMin=0, speed=1, playing=false, dataLayer=false, xray=false;
+let unitSeq=0, selected=null;
+let stats;
+const SHIFT_MIN=480, DAY_MIN=960;
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const fmtClock=m=>{const t=(360+m)%1440;return String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');};
+
+function resetSim(){
+  simMin=0; unitSeq=0; units=[]; bench=[]; feed=[];
+  $('feed').innerHTML='';
+  stats={good:0,fpyPass:0,done:0,scrap:0,escapes:0,shift:1,s1good:null};
+  track={
+    station:STATIONS.map(()=>({units:0,busy:0,idle:0,blocked:0,cycSum:0,qMax:0,born:0,caught:0})),
+    defects:Object.fromEntries(Object.keys(DEFECTS).map(k=>[k,{born:0,test:0,vis:0,esc:0,scrapped:0}])),
+    events:{pass:0,fail:0,reject:0,rework:0,scrapT:0,ship:0,rotations:0,trainerVisits:0,
+            signoffs:0,walkthroughs:0,mePulls:0,reports:0,captured:0,invisible:0},
+    bench:{in:0,out:0,scrap:0,dwellSum:0},
+    people:{}, kits:0, snaps:[],
+  };
+  stations = STATIONS.map(()=>({q:[],cur:null,rem:0,waitingOut:false}));
+  people = [];
+  const skills=[1.0,1.05,0.95,1.0,0.85,1.0]; // op5 (index 4) is the new hire
+  for(let i=0;i<6;i++){
+    const st=[0,1,2,3,4,7][i];
+    people.push(mkPerson('operator','OP'+(i+1),OP_ANCHOR(st),
+      {station:st, skill:skills[i], newhire:i===4}));
+  }
+  people.push(mkPerson('qtech','QT',{x:836,y:306},{station:5,skill:1.05}));
+  people.push(mkPerson('lead','LL',{x:DESK.x+60,y:DESK.y+70},{}));
+  people.push(mkPerson('trainer','TR',{x:540,y:-40},{offstage:true}));
+  people.push(mkPerson('supervisor','SV',{x:600,y:-40},{offstage:true}));
+  people.push(mkPerson('engineer','ME',{x:660,y:-40},{offstage:true}));
+  people.forEach(p=>track.people[p.label]={units:0,born:0,stations:new Set()});
+  timers={rotate:120, trainer:70, supervisor:45, wander:0};
+  logEv('Shift 1 starts — 6 operators, quality tech, line lead on the cell','inv');
+  renderAll(); updateHUD(); showOverview();
+}
+function mkPerson(role,label,home,extra){
+  return Object.assign({role,label,x:home.x,y:home.y,tx:home.x,ty:home.y,home:{...home},
+    spd:42,busyUntil:0,phase:Math.random()*7},extra);
+}
+let timers={};
+
+/* ---------- units ---------- */
+function mkUnit(){
+  const u={id:++unitSeq, variant:VARIANTS[Math.floor(Math.random()*VARIANTS.length)],
+    stage:0, defects:[], firstPass:true, reworks:0, x:0,y:0, path:null, seg:0, segT:0,
+    state:'work'};
+  return u;
+}
+function injectDefects(u, stIdx, mult){
+  const add=(k,p)=>{ if(Math.random()<p*mult){ u.defects.push({k,detected:false,fixed:false});
+    track.defects[k].born++; track.station[stIdx].born++;
+    const op=opAt(stIdx); if(op&&track.people[op.label]) track.people[op.label].born++; } };
+  if(stIdx===1) add('badCrimp',DPROB.badCrimp);
+  if(stIdx===2){ add('misSeat',DPROB.misSeat); add('wrongCavity',DPROB.wrongCavity*0.6); }
+  if(stIdx===3) add('wrongCavity',DPROB.wrongCavity*0.4);
+  if(stIdx===4) add('clipsTape',DPROB.clipsTape);
+  if(stIdx===7) add('labelMismatch',DPROB.labelMismatch);
+  const fresh=u.defects.filter(d=>!d.detected&&!d.fixed);
+  if(fresh.length && stIdx<5){
+    const d=fresh[fresh.length-1];
+    if(!d.logged){d.logged=true;
+      logEv(`Unit #${u.id} picked up "${DEFECTS[d.k].name}" at station ${stIdx+1} — nothing noticed, nothing recorded`,'inv',true);}
+  }
+}
+function opAt(stIdx){ return people.find(p=>p.role==='operator'&&p.station===stIdx) ||
+                             (stIdx===5||stIdx===6 ? people.find(p=>p.role==='qtech') : null); }
+
+/* ---------- station processing ---------- */
+function stepStations(dt){
+  // work from downstream to upstream so space frees up in one pass
+  for(let i=7;i>=0;i--){
+    const st=stations[i], meta=STATIONS[i];
+    const tr=track.station[i];
+    if(st.cur&&st.waitingOut) tr.blocked+=dt; else if(st.cur) tr.busy+=dt; else tr.idle+=dt;
+    if(st.q.length>tr.qMax) tr.qMax=st.q.length;
+    if(st.cur){
+      st.rem-=dt;
+      if(st.rem<=0 && !st.waitingOut){
+        finishStation(i);
+      }
+      if(st.waitingOut && st.cur){ // try to release
+        if(i===7){ launchTravel(st.cur,7); st.cur=null; st.waitingOut=false; }
+        else if(stations[i+1].q.length<3){ launchTravel(st.cur,i); st.cur=null; st.waitingOut=false; }
+      }
+    }
+    if(!st.cur){
+      if(i===0){
+        if(stations[1].q.length<3 && !st.waitingOut){
+          st.cur=mkUnit(); units.push(st.cur); track.kits++;
+          const op=opAt(0);
+          st.rem=rnd(...meta.cyc)*(op?1/op.skill:1)*shiftMult();
+          st.cycTotal=st.rem;
+          positionUnitAtStation(st.cur,0);
+        }
+      } else if(st.q.length){
+        st.cur=st.q.shift(); st.cur.state='work';
+        const op=opAt(i);
+        st.rem=rnd(...meta.cyc)*(op?1/op.skill:1)*shiftMult();
+        st.cycTotal=st.rem;
+        positionUnitAtStation(st.cur,i);
+        relayoutQueue(i);
+      }
+    }
+  }
+}
+function shiftMult(){ return stats.shift===2?1.06:1.0; } // second crew slightly greener
+function finishStation(i){
+  const st=stations[i], u=st.cur, op=opAt(i);
+  const tr=track.station[i]; tr.units++; tr.cycSum+=st.cycTotal||0;
+  if(op){const P=track.people[op.label]; P.units++; P.stations.add(i+1);}
+  const dMult=(op&&op.newhire?2.2:1)*(stats.shift===2?1.15:1);
+  if(i===5){ runTest(u); } else if(i===6){ runVisual(u); }
+  injectDefects(u,i,dMult);
+  if(st.cur===u) st.waitingOut=true; // unit may have left for the rework bench
+}
+function runTest(u){
+  u.failedNow=false;
+  const live=u.defects.filter(d=>!d.fixed);
+  let caught=null;
+  for(const d of live){ if(!d.detected && Math.random()<DCATCH[d.k].test){ caught=d; break; } }
+  if(caught){
+    caught.detected=true; u.firstPass=false; u.failedNow=true;
+    track.events.fail++; track.station[5].caught++; track.defects[caught.k].test++;
+    logEv(`TESTER: unit #${u.id} FAIL — code ${DEFECTS[caught.k].code} → logged automatically`,'cap',false,true);
+    sendToBench(u,caught);
+  } else {
+    track.events.pass++;
+    logEv(`TESTER: unit #${u.id} PASS (${u.variant}) — timestamped in tester log`,'cap');
+  }
+}
+function runVisual(u){
+  u.failedNow=false;
+  const live=u.defects.filter(d=>!d.fixed&&!d.detected);
+  let caught=null;
+  for(const d of live){ if(Math.random()<DCATCH[d.k].vis){ caught=d; break; } }
+  if(caught){
+    caught.detected=true; u.firstPass=false; u.failedNow=true;
+    track.events.reject++; track.station[6].caught++; track.defects[caught.k].vis++;
+    logEv(`INSPECTION: unit #${u.id} rejected — ${DEFECTS[caught.k].name.toLowerCase()} → rework tag (paper)`,'cap',false,true);
+    sendToBench(u,caught);
+  }
+}
+function sendToBench(u,d){
+  const st=stations[u.stage];
+  if(st.cur===u){st.cur=null;st.waitingOut=false;}
+  u.state='bench'; u.benchRem=rnd(4,8); u.benchDef=d; u.reworks++;
+  track.bench.in++; track.bench.dwellSum+=u.benchRem;
+  u.x=BENCH.x+20+bench.length*24; u.y=BENCH.y+BENCH.h/2;
+  bench.push(u);
+}
+function stepBench(dt){
+  for(let i=bench.length-1;i>=0;i--){
+    const u=bench[i]; u.benchRem-=dt;
+    if(u.benchRem<=0){
+      bench.splice(i,1);
+      if(Math.random()<0.18){
+        u.state='dead'; stats.scrap++; stats.done++;
+        track.events.scrapT++; track.bench.scrap++; track.defects[u.benchDef.k].scrapped++;
+        const me=people.find(p=>p.role==='engineer');
+        if(track.bench.scrap>=2 && me.offstage) me.pending=true;
+        killUnit(u);
+        logEv(`Scrap ticket written for unit #${u.id} (paper — reaches the quality system in ~3 days)`,'cap lag');
+      } else {
+        u.benchDef.fixed=true; u.state='queue'; u.failedNow=false;
+        track.events.rework++; track.bench.out++;
+        const back = u.benchDef.k==='clipsTape'?6:5; // recheck at the station that caught it
+        u.stage=back; stations[back].q.push(u); relayoutQueue(back);
+        logEv(`Unit #${u.id} reworked at the bench and sent back to re-${back===5?'test':'inspect'} — the loop itself isn’t recorded anywhere`,'inv');
+      }
+    }
+  }
+}
+function shipUnit(u){
+  stats.done++; stats.good++; track.events.ship++;
+  if(u.firstPass) stats.fpyPass++;
+  const esc=u.defects.filter(d=>!d.detected&&!d.fixed);
+  if(esc.length){
+    stats.escapes++;
+    esc.forEach(d=>track.defects[d.k].esc++);
+    const d=esc[0];
+    logEv(`Unit #${u.id} shipped WITH ${DEFECTS[d.k].name.toLowerCase()} on board — will surface as a customer complaint, in a separate plant system, weeks from now`,'cap lag',false,true);
+  }
+  u.state='dead'; killUnit(u);
+  updateHUD();
+}
+function killUnit(u){ const el=document.getElementById('u'+u.id); if(el) el.remove();
+  units=units.filter(x=>x!==u); if(selected&&selected.type==='unit'&&selected.obj===u) showOverview(); }
+
+/* ---------- unit travel ---------- */
+function launchTravel(u,fromIdx){
+  u.state='move'; u.path=ROUTES[fromIdx]; u.seg=0; u.segT=0; u.stage=fromIdx+1;
+  u.x=u.path[0].x; u.y=u.path[0].y;
+}
+function stepTravel(dt){
+  const spd=340; // svg units per sim-min
+  for(const u of units){
+    if(u.state!=='move') continue;
+    let d=spd*dt;
+    while(d>0 && u.seg<u.path.length-1){
+      const a=u.path[u.seg], b=u.path[u.seg+1];
+      const len=Math.hypot(b.x-a.x,b.y-a.y), left=len*(1-u.segT);
+      if(d<left){ u.segT+=d/len; d=0; }
+      else{ d-=left; u.seg++; u.segT=0; }
+    }
+    const a=u.path[Math.min(u.seg,u.path.length-2)], b=u.path[Math.min(u.seg+1,u.path.length-1)];
+    u.x=a.x+(b.x-a.x)*u.segT; u.y=a.y+(b.y-a.y)*u.segT;
+    if(u.seg>=u.path.length-1){
+      if(u.stage>=8){ shipUnit(u); }
+      else { u.state='queue'; stations[u.stage].q.push(u); relayoutQueue(u.stage); }
+    }
+  }
+}
+function positionUnitAtStation(u,i){
+  const s=STATIONS[i]; u.state='work'; u.stage=i;
+  u.x=s.x+SW/2; u.y=s.y+SH-16;
+  if(s.side==='B'){u.x=s.x+SW-22;u.y=s.y+SH/2;}
+  if(s.side==='R'){u.y=s.y+18;}
+}
+function relayoutQueue(i){
+  const p=PORT(STATIONS[i]).in, s=STATIONS[i];
+  stations[i].q.forEach((u,k)=>{
+    if(s.side==='L'){u.x=p.x;u.y=p.y-14-k*16;}
+    else if(s.side==='B'){u.x=p.x-14-k*16;u.y=p.y;}
+    else {u.x=p.x;u.y=p.y+14+k*16;}
+  });
+}
+
+/* ---------- people behavior ---------- */
+function stepPeople(dt,realDt){
+  timers.wander-=dt;
+  const wanderNow = timers.wander<=0;
+  if(wanderNow) timers.wander=2.2;
+  for(const p of people){
+    if(p.role==='operator'&&wanderNow&&Math.random()<.5&&!p.away){
+      const a=OP_ANCHOR(p.station); p.tx=a.x+rnd(-9,9); p.ty=a.y+rnd(-7,7);
+    }
+    if(p.role==='qtech'&&wanderNow){
+      const spots=[{x:836,y:392},{x:836,y:252}]; const s=spots[Math.random()<.5?0:1];
+      p.tx=s.x+rnd(-6,6); p.ty=s.y+rnd(-6,6);
+    }
+    if(p.role==='lead') stepLead(p,dt);
+    const dx=p.tx-p.x, dy=p.ty-p.y, dist=Math.hypot(dx,dy);
+    const step=p.spd*dt;
+    if(dist>1){ p.x+=dx/dist*Math.min(step,dist); p.y+=dy/dist*Math.min(step,dist); }
+    p.phase+=realDt*3;
+  }
+  // trainer visit
+  timers.trainer-=dt;
+  const tr=people.find(p=>p.role==='trainer');
+  if(timers.trainer<=0 && tr.offstage){
+    tr.offstage=false; const nh=people.find(p=>p.newhire);
+    const a=OP_ANCHOR(nh.station); tr.tx=a.x+16; tr.ty=a.y+16; tr.visitRem=22;
+    track.events.trainerVisits++;
+    logEv('Trainer on the floor — coaching the new hire (visit not logged anywhere)','inv');
+  } else if(!tr.offstage){
+    tr.visitRem-=dt;
+    if(tr.visitRem<=0){
+      tr.offstage=true; tr.tx=540; tr.ty=-40; timers.trainer=rnd(90,150);
+      if(Math.random()<.5){ track.events.signoffs++;
+        logEv('Trainer signed off the new hire on station '+(people.find(p=>p.newhire).station+1)+' → training matrix row (updated at month-end)','cap lag'); }
+    }
+  }
+  // manufacturing engineer — pulled in when scrap piles up
+  const me=people.find(p=>p.role==='engineer');
+  if(me.pending && me.offstage){
+    me.offstage=false; me.pending=false; me.x=660; me.y=-40;
+    me.tx=830; me.ty=430; me.visitRem=18; track.events.mePulls++;
+    logEv('Manufacturing engineer pulled to the cell — investigating scrap by interview and stopwatch (nothing to query)','inv');
+  } else if(!me.offstage){
+    me.visitRem-=dt;
+    if(me.visitRem<=0){ me.offstage=true; me.tx=660; me.ty=-40; }
+  }
+  // supervisor walk-through
+  timers.supervisor-=dt;
+  const sv=people.find(p=>p.role==='supervisor');
+  if(timers.supervisor<=0 && sv.offstage){
+    sv.offstage=false; sv.loop=[{x:540,y:80},{x:280,y:300},{x:540,y:526},{x:790,y:300},{x:600,y:-40}];
+    sv.li=0; sv.tx=sv.loop[0].x; sv.ty=sv.loop[0].y;
+    track.events.walkthroughs++;
+    logEv('Supervisor walk-through (they cover two cells — gone again in minutes)','inv');
+  } else if(!sv.offstage){
+    if(Math.hypot(sv.tx-sv.x,sv.ty-sv.y)<3){
+      sv.li++;
+      if(sv.li>=sv.loop.length){ sv.offstage=true; timers.supervisor=rnd(70,120); }
+      else { sv.tx=sv.loop[sv.li].x; sv.ty=sv.loop[sv.li].y; }
+    }
+  }
+  // operator rotation on stations 1-5
+  timers.rotate-=dt;
+  if(timers.rotate<=0){
+    timers.rotate=120;
+    const ops=people.filter(p=>p.role==='operator'&&p.station<5);
+    const stns=ops.map(o=>o.station);
+    ops.forEach((o,k)=>{ o.station=stns[(k+1)%stns.length];
+      const a=OP_ANCHOR(o.station); o.tx=a.x; o.ty=a.y; });
+    track.events.rotations++;
+    logEv('Operators rotated stations 1–5 — who ran what is now recorded nowhere','inv',true);
+  }
+}
+function stepLead(p,dt){
+  if(!p.loop){ p.loop=[{x:DESK.x+60,y:DESK.y+70},{x:266,y:200},{x:266,y:430},{x:330,y:526},{x:700,y:526},{x:812,y:300}]; p.li=0; }
+  if(Math.hypot(p.tx-p.x,p.ty-p.y)<3){
+    p.li=(p.li+1)%p.loop.length; p.tx=p.loop[p.li].x+rnd(-6,6); p.ty=p.loop[p.li].y+rnd(-6,6);
+  }
+}
+
+/* ---------- shift & clock ---------- */
+function stepShift(prev,now){
+  if(prev<SHIFT_MIN&&now>=SHIFT_MIN){
+    stats.s1good=stats.good;
+    track.events.reports++;
+    track.snaps.push({label:'Shift 1',good:stats.good,done:stats.done,fpyPass:stats.fpyPass,
+      scrap:stats.scrap,esc:stats.escapes,fail:track.events.fail,reject:track.events.reject});
+    logEv(`Line lead writes the Shift 1 production report from memory: ${stats.good} good units, downtime "about 20 min", headcount 8`,'cap');
+    logEv('Shift 2 crew takes over — slightly greener; watch FPY drift. Today’s data can’t show you why.','inv',true);
+    stats.shift=2; stats.good=0;
+  }
+  if(prev<DAY_MIN&&now>=DAY_MIN){
+    playing=false; playBtn.textContent='▶ Play';
+    track.events.reports++;
+    logEv(`Line lead writes the Shift 2 report: ${stats.good} good units. Day over.`,'cap');
+    showDaySummary();
+    openSummary();
+  }
+}
+
+/* =====================================================================
+   RENDERING
+   ===================================================================== */
+const svgNS='http://www.w3.org/2000/svg';
+const $=id=>document.getElementById(id);
+const floor=$('floor'), tip=$('tip');
+function el(tag,attrs,parent){const e=document.createElementNS(svgNS,tag);
+  for(const k in attrs)e.setAttribute(k,attrs[k]); if(parent)parent.appendChild(e); return e;}
+
+function renderStatic(){
+  floor.innerHTML='';
+  // flow path under everything
+  const pts=[[125,52],[125,592],[955,592],[955,52]];
+  el('path',{class:'flow-path',d:'M'+pts.map(p=>p.join(' ')).join(' L ')},floor);
+  // in/out labels
+  const t1=el('text',{class:'zone-label',x:40,y:40},floor); t1.textContent='▼ kits & material in';
+  const t2=el('text',{class:'zone-label',x:872,y:40},floor); t2.textContent='finished goods out ▲';
+  const t3=el('text',{class:'zone-label',x:420,y:680},floor); t3.textContent='one u-shaped manual assembly cell';
+  // rework bench
+  const bg=el('g',{id:'benchG',cursor:'pointer'},floor);
+  el('rect',{class:'fixture',x:BENCH.x,y:BENCH.y,width:BENCH.w,height:BENCH.h,rx:7},bg);
+  const bl=el('text',{class:'fixture-label',x:BENCH.x+10,y:BENCH.y+18},bg); bl.textContent='REWORK BENCH';
+  const bl2=el('text',{class:'fixture-label',x:BENCH.x+10,y:BENCH.y+32},bg); bl2.textContent='paper tags live here';
+  bg.addEventListener('click',()=>selectDataSource('scrap'));
+  hoverTip(bg,()=>`<b>Rework bench</b><div class="m">Failed units get fixed (or scrapped) here. Paper scrap tickets & rework tags — keyed into the quality system days later.</div>`);
+  // lead desk
+  const dg=el('g',{id:'deskG',cursor:'pointer'},floor);
+  el('rect',{class:'fixture',x:DESK.x,y:DESK.y,width:DESK.w,height:DESK.h,rx:7},dg);
+  const dl=el('text',{class:'fixture-label',x:DESK.x+10,y:DESK.y+19},dg); dl.textContent='LINE LEAD DESK';
+  const dl2=el('text',{class:'fixture-label',x:DESK.x+10,y:DESK.y+33},dg); dl2.textContent='shift report';
+  dg.addEventListener('click',()=>selectDataSource('shift'));
+  hoverTip(dg,()=>`<b>Line lead desk</b><div class="m">The shift production report gets written here at end of shift — units, downtime notes, headcount, from memory.</div>`);
+  // product board — the "golden sample" posted in the middle of the cell
+  const pb=el('g',{id:'boardG',cursor:'pointer'},floor);
+  el('rect',{x:352,y:334,width:376,height:176,rx:8,fill:'#1B1E24',stroke:'#8A5F3A','stroke-width':1.2},pb);
+  const pt=el('text',{class:'fixture-label',x:368,y:351,style:'fill:#D98E4A'},pb);
+  pt.textContent='THE PRODUCT · M-24 GOLDEN SAMPLE';
+  const pt2=el('text',{class:'fixture-label',x:726,y:351,'text-anchor':'end'},pb);
+  pt2.textContent='click for the full breakdown';
+  const pa=el('g',{transform:'translate(368,356) scale(0.78)'},pb);
+  pa.innerHTML=PRODUCT_ART;
+  pb.addEventListener('click',()=>selectProduct());
+  hoverTip(pb,()=>`<b>The finished M-24</b><div class="m">Golden sample — the reference unit posted at the cell so everyone knows what "done" looks like. Click for every piece, explained.</div>`);
+  // stations
+  STATIONS.forEach((s,i)=>{
+    const g=el('g',{class:'station','data-i':i,id:'stG'+i,tabindex:0,role:'button'},floor);
+    el('rect',{class:'st-body',x:s.x,y:s.y,width:SW,height:SH,rx:8},g);
+    const n=el('text',{class:'st-num',x:s.x+12,y:s.y+24},g); n.textContent='S'+s.n;
+    const nm=el('text',{class:'st-name',x:s.x+12,y:s.y+44},g); nm.textContent=s.name;
+    const cy=el('text',{class:'st-cyc',x:s.x+12,y:s.y+62},g); cy.textContent=s.cycTxt.split('·')[0].trim();
+    el('circle',{class:'st-light idle',id:'light'+i,cx:s.x+SW-16,cy:s.y+16},g);
+    el('rect',{class:'prog-bg',x:s.x+12,y:s.y+SH-18,width:SW-24,height:5,rx:2.5},g);
+    el('rect',{class:'prog-fg',id:'prog'+i,x:s.x+12,y:s.y+SH-18,width:0,height:5,rx:2.5},g);
+    // data layer adornments
+    g.classList.add(s.data?'hasdata':'nodata');
+    if(s.data){
+      const b=el('g',{class:'databadge'},g);
+      el('circle',{cx:s.x+SW-16,cy:s.y+SH-16,r:9},b);
+      const bt=el('text',{x:s.x+SW-16,y:s.y+SH-13},b); bt.textContent='D';
+    } else {
+      const nt=el('text',{class:'nodata-tag',x:s.x+12,y:s.y+SH+16},g); nt.textContent='NO DATA';
+    }
+    g.addEventListener('click',()=>selectStation(i));
+    g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectStation(i);}});
+    hoverTip(g,()=>{
+      const st=stations[i];
+      return `<b>S${s.n} · ${s.name}</b><div class="m">${s.cycTxt} · ${st.cur?'working':'idle'}${st.q.length?' · queue '+st.q.length:''}</div><div class="m">click for details, defects & data</div>`;});
+  });
+  // dynamic layers
+  el('g',{id:'unitLayer'},floor);
+  el('g',{id:'peopleLayer'},floor);
+}
+
+function renderAll(){ renderStatic(); $('unitLayer').innerHTML=''; $('peopleLayer').innerHTML='';
+  people.forEach(renderPerson); }
+
+function renderPerson(p){
+  const g=el('g',{class:'person'+(p.newhire?' newhire':''),id:'p'+p.label},$('peopleLayer'));
+  el('circle',{class:'dot',r:10,stroke:ROLES[p.role].hex},g);
+  const t=el('text',{y:3.2},g); t.textContent=p.label;
+  g.addEventListener('click',()=>selectPerson(p));
+  hoverTip(g,()=>`<b>${ROLES[p.role].title}${p.newhire?' · new hire':''}</b><div class="m">${p.role==='operator'?'currently at station '+(p.station+1):''} click for role details</div>`);
+}
+function drawPeople(){
+  for(const p of people){
+    const g=document.getElementById('p'+p.label); if(!g) continue;
+    const bob=reduceMotion?0:Math.sin(p.phase)*1.3;
+    g.setAttribute('transform',`translate(${p.x},${p.y+bob})`);
+    g.style.display = p.offstage&&p.y<-20?'none':'';
+  }
+}
+function drawUnits(){
+  const layer=$('unitLayer');
+  for(const u of units){
+    let g=document.getElementById('u'+u.id);
+    if(!g){
+      g=el('g',{class:'unit',id:'u'+u.id},layer);
+      el('rect',{x:-7,y:-5,width:14,height:10,rx:2},g);
+      g.addEventListener('click',ev=>{ev.stopPropagation();selectUnit(u);});
+      hoverTip(g,()=>{
+        const hid=u.defects.filter(d=>!d.detected&&!d.fixed).length;
+        return `<b>Unit #${u.id} · ${u.variant}</b><div class="m">${u.state==='bench'?'in rework':'after station '+(u.stage)+(u.state==='work'?' (in work at S'+(u.stage+1)+')':'')}${xray&&hid?` · <span style="color:var(--fail)">carrying ${hid} hidden defect${hid>1?'s':''}</span>`:''} · click to see the build</div>`;});
+    }
+    g.setAttribute('transform',`translate(${u.x},${u.y})`);
+    g.setAttribute('class','unit'+(u.state==='queue'?' queued':'')+(u.state==='bench'?' failed':'')+
+      (xray&&u.defects.some(d=>!d.detected&&!d.fixed)?' hidden-defect':''));
+  }
+}
+function drawStations(){
+  stations.forEach((st,i)=>{
+    const light=$('light'+i), prog=$('prog'+i), meta=STATIONS[i];
+    let cls='st-light ';
+    if(st.cur&&st.waitingOut) cls+='blocked';
+    else if(st.cur) cls+='busy';
+    else cls+='idle';
+    if((i===5||i===6)&&st.cur&&st.cur.failedNow) cls='st-light fail';
+    light.setAttribute('class',cls);
+    const frac=st.cur? Math.max(0,Math.min(1,1-(st.rem/( (meta.cyc[0]+meta.cyc[1])/2 )))):0;
+    prog.setAttribute('width',(SW-24)*(st.cur&&!st.waitingOut?frac:st.waitingOut?1:0));
+    $('stG'+i).classList.toggle('blocked',!!st.waitingOut);
+  });
+}
+
+/* ---------- tooltip ---------- */
+let reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
+function hoverTip(target,html){
+  target.addEventListener('mousemove',e=>{
+    tip.innerHTML=html(); tip.style.display='block';
+    const wrap=$('floorWrap').getBoundingClientRect();
+    let x=e.clientX-wrap.left+14, y=e.clientY-wrap.top+12;
+    if(x+250>wrap.width) x-=270; if(y+80>wrap.height) y-=90;
+    tip.style.left=x+'px'; tip.style.top=y+'px';
+  });
+  target.addEventListener('mouseleave',()=>tip.style.display='none');
+}
+
+/* =====================================================================
+   INSPECTOR
+   ===================================================================== */
+const insp=$('inspector');
+function setSel(type,obj){ selected={type,obj};
+  document.querySelectorAll('.station.sel').forEach(g=>g.classList.remove('sel'));
+  if(type==='station') $('stG'+obj).classList.add('sel');
+}
+function wireTerms(scope){
+  (scope||insp).querySelectorAll('.term').forEach(t=>{
+    t.addEventListener('click',e=>{e.stopPropagation();openGlossary(t.dataset.t);});
+    t.addEventListener('keydown',e=>{if(e.key==='Enter'){openGlossary(t.dataset.t);}});
+  });
+}
+function showOverview(){
+  setSel('overview',null);
+  insp.innerHTML=`
+   <div class="eyebrow">The case, on one floor</div>
+   <h2>One cell. Eight stations. Five of them invisible.</h2>
+   <p>This is Appendix A running live: a ${T('ucell','U-shaped manual cell')} building the
+   <b>M-24</b> ${T('sealed','sealed connector')} ${T('harness','harness')} — a
+   24-${T('circuit','circuit')} wiring assembly. 6 operators + a ${T('qualitytech','quality tech')}
+   across 8 stations, two shifts, ${T('takt','takt')} ≈ 4 min, target ≈ 200 good units per shift,
+   ${T('fpy','first-pass yield')} 92–96%.</p>
+   <h3>Click anything</h3>
+   <ul>
+     <li><b>Stations</b> — what happens there, cycle time, which defects start or get caught there, and what data it produces (usually: none)</li>
+     <li><b>People</b> — the six roles around the line and the data each one does or doesn’t generate</li>
+     <li><b>The product board</b> (center of the U) — the finished M-24 golden sample with every piece labeled</li>
+     <li><b>Copper chips</b> — individual harnesses; see exactly what’s been built onto each one so far</li>
+     <li><b>Rework bench & lead desk</b> — where the paper lives</li>
+   </ul>
+   <h3>Two toggles worth trying</h3>
+   <p><b>Data layer</b> dims every station that produces no data — watch stations 1–5 go dark. <b>Reality view</b> outlines units carrying defects nobody has found yet; plant view (default) is what today’s data would actually let you see.</p>
+   <div class="note"><b>Watch station 3.</b> At 4–5 min it runs over the 4-minute takt — the ${T('bottleneck','bottleneck')}. Its queue will grow all shift, and no system on this floor can see it happening.</div>
+   <div class="note"><b>A number that doesn't ring true:</b> a 480-minute shift ÷ a 4-minute takt supports ~120 units, yet the case targets ≈200 per shift. Those can't both hold. The handout explicitly asks you to mark anything that doesn't ring true — this is one to raise. (The sim runs the physics honestly, so expect ~100–110 good units per shift, not 200.)</div>
+   <h3>Roles on the floor</h3>
+   <ul>${Object.entries(ROLES).map(([k,r])=>`<li style="border-left:3px solid ${r.hex};padding-left:10px">${r.title}${k==='operator'?' ×6 (OP5 is a new hire — dashed ring)':''}</li>`).join('')}</ul>`;
+  wireTerms();
+}
+function selectStation(i){
+  setSel('station',i);
+  const s=STATIONS[i], st=stations[i];
+  const intro=Object.values(DEFECTS).filter(d=>d.at===s.n);
+  const caught=[]; if(s.n===6) caught.push('badCrimp','misSeat','wrongCavity');
+  if(s.n===7) caught.push('clipsTape');
+  insp.innerHTML=`
+   <div class="eyebrow">Station ${s.n} of 8</div>
+   <h2>${s.name}</h2>
+   <div class="kv"><span>Approx. ${T('cycletime','cycle time')}</span><b>${s.cycTxt}</b></div>
+   <div class="kv"><span>Right now</span><b>${st.cur?('working unit #'+st.cur.id):'idle'}${st.q.length?' · '+st.q.length+' waiting':''}</b></div>
+   <h3>What happens here</h3><p>${s.what}</p>
+   <div class="gillus">${ILLUS[SILL[i]]}</div>
+   <a class="glink" href="${SLINK[i][1]}" target="_blank" rel="noopener">see this station in real life ↗</a>
+   ${intro.length?`<h3>Defects that START here</h3>`+intro.map(d=>{
+     const key=Object.keys(DEFECTS).find(k=>DEFECTS[k]===d);
+     return `<button class="linkrow" data-d="${key}"><b>#${d.rank} worst · ${d.name}</b><br><span style="color:var(--muted);font-size:12px">${d.desc}</span></button>`;}).join(''):''}
+   ${caught.length?`<h3>Defects CAUGHT here</h3>`+caught.map(k=>`<button class="linkrow" data-d="${k}"><b>${DEFECTS[k].name}</b><br><span style="color:var(--muted);font-size:12px">${DEFECTS[k].caught}</span></button>`).join(''):''}
+   <h3>Data this station produces</h3>
+   ${s.data?`<p><span class="chip cap">captured</span> ${s.data}</p>`
+           :`<p><span class="chip inv">invisible</span> None. ${s.dataGap}</p>`}
+   ${s.n<6?`<div class="note"><b>The gap, right here:</b> no station-level timing and no in-process signals exist for stations 1–5. Whatever you just watched this station do — today’s systems never saw it.</div>`:''}`;
+  insp.querySelectorAll('[data-d]').forEach(b=>b.addEventListener('click',()=>selectDefect(b.dataset.d)));
+  wireTerms();
+}
+function selectDefect(k){
+  const d=DEFECTS[k];
+  setSel('defect',k);
+  insp.innerHTML=`
+   <div class="eyebrow">Defect category · #${d.rank} of 5, worst first</div>
+   <h2>${d.name}</h2>
+   <p>${d.desc}</p>
+   <div class="kv"><span>Starts at</span><b>Station ${d.at} — ${STATIONS[d.at-1].name}</b></div>
+   <div class="kv"><span>Tester code</span><b>${d.code}</b></div>
+   <h3>Where it gets caught</h3><p>${d.caught}</p>
+   <h3>Why it matters for the case</h3>
+   <p>${k==='badCrimp'?'The #1 defect starts at station 2, but the first data about it appears four stations later in the tester log. Everything between is inference.':''}
+      ${k==='misSeat'?'The nastiest kind: it can pass every check in the building and still fail in the field. The touch-check at station 3 is pure operator feel — zero signal captured.':''}
+      ${k==='wrongCavity'?'The tester catches these reliably — proof that where a rich sensor exists, the defect is controlled. The question the case asks: what would "a tester’s worth of visibility" look like for stations 1–5?':''}
+      ${k==='clipsTape'?'Electrically invisible, so the one automatic check can’t see it. It depends entirely on human attention at station 7 — and escapes more often than any other category.':''}
+      ${k==='labelMismatch'?'The cheapest defect to make and the most expensive to find. It surfaces at the customer, gets logged in a separate plant-level system, and rarely traces back to a cause.':''}</p>
+   <button class="linkrow" id="backSt">← Station ${d.at} · ${STATIONS[d.at-1].name}</button>`;
+  $('backSt').addEventListener('click',()=>selectStation(d.at-1));
+  wireTerms();
+}
+function selectPerson(p){
+  setSel('person',p.label);
+  const c=ROLECARDS[p.role];
+  insp.innerHTML=`
+   <div class="eyebrow" style="color:${ROLES[p.role].hex}">Role on the line</div>
+   <h2>${ROLES[p.role].title}${p.newhire?' <span style="font-size:13px;color:var(--muted)">(this one’s a new hire)</span>':''}</h2>
+   ${p.role==='operator'?`<div class="kv"><span>Currently at</span><b>Station ${p.station+1} — ${STATIONS[p.station].name}</b></div>
+   <div class="kv"><span>Rotates</span><b>stations 1–5, every ~2 h</b></div>`:''}
+   ${p.role==='qtech'?`<div class="kv"><span>Owns</span><b>Stations 6–7 (test & inspection)</b></div>`:''}
+   <h3>What they do</h3><p>${c.who}</p>
+   <h3>Data they generate</h3><p>${c.produces}</p>
+   <div class="note"><b>The blind spot:</b> ${c.gap}</div>
+   ${p.newhire?`<div class="defect-flag">In this simulation the new hire’s station produces ~2× the defects while they learn. Toggle <b>Reality view</b> and watch their station — then remember: today’s data could never show this, because training status and quality outcomes live in systems that don’t talk.</div>`:''}`;
+  wireTerms();
+}
+const STAGE_BUILD=[
+ '24 wires cut to variant length, ends stripped, gathered as a kit',
+ 'Copper terminals crimped onto every wire end',
+ 'Terminals + cavity seals clicked into the connector body',
+ 'Bundle routed into its branch shape on the pin board',
+ 'Tape wrapped; retention clips and grommets installed',
+ 'All 24 circuits continuity-tested + seal test',
+ 'Workmanship visually inspected',
+ 'Variant label applied, unit boxed'];
+function selectUnit(u){
+  setSel('unit',u);
+  const compl=u.stage; // stations completed so far (0-based index of current station)
+  const hidden=u.defects.filter(d=>!d.detected&&!d.fixed);
+  const fixed=u.defects.filter(d=>d.fixed);
+  insp.innerHTML=`
+   <div class="eyebrow">Work in process</div>
+   <h2>Unit #${u.id} · <span style="font-family:var(--mono);font-size:16px">${u.variant}</span></h2>
+   <div class="kv"><span>Status</span><b>${u.state==='bench'?'at rework bench':u.state==='move'?'moving to S'+(u.stage+1):(u.state==='queue'?'queued at S':'in work at S')+(u.stage+1)}</b></div>
+   <div class="kv"><span>${T('fpy','First-pass')}</span><b>${u.firstPass?'still clean':'lost (reworked ×'+u.reworks+')'}</b></div>
+   <div class="harness-fig">${harnessSVG(compl)}</div>
+   <a class="glink" href="https://www.google.com/search?udm=2&q=automotive+wire+harness+assembly" target="_blank" rel="noopener">what a real harness looks like ↗</a>
+   <h3>Built so far</h3>
+   <ul class="buildlist">${STAGE_BUILD.map((t,k)=>`<li class="${k<compl?'':'todo'}">${k<compl?'✓ ':''}${t}</li>`).join('')}</ul>
+   ${fixed.length?fixed.map(d=>`<p><span class="chip ok">reworked</span> ${DEFECTS[d.k].name} — caught & fixed</p>`).join(''):''}
+   ${hidden.length? (xray? hidden.map(d=>`<div class="defect-flag"><b>Hidden defect on board: ${DEFECTS[d.k].name}</b> — picked up at station ${DEFECTS[d.k].at}. ${DEFECTS[d.k].caught}</div>`).join('')
+      : `<div class="note"><b>Plant view:</b> as far as any of today’s data can tell, this unit is perfect. Switch on <b>Reality view</b> to see what the data can’t.</div>`)
+     : `<p><span class="chip ok">clean</span> No defects on board${compl<6?' — so far':''}.</p>`}`;
+  wireTerms();
+}
+function harnessSVG(stage){
+  // progressive build drawing of the M-24. stage = stations completed (0..8)
+  const wireCols=['#E25B5B','#E3B34F','#5B8DD9','#5CBE79','#EAE8E2','#9B7ED9'];
+  let s='<svg viewBox="0 0 340 130">';
+  const done=c=>stage>=c;
+  // stage>=1: wires fanned
+  if(done(1)){
+    for(let i=0;i<6;i++){
+      const y=25+i*14, c=wireCols[i];
+      s+=`<path d="M60 ${y} C 130 ${y}, 150 ${done(4)?60:y}, ${done(4)?230:210} ${done(4)?62:y}" stroke="${c}" stroke-width="3" fill="none" opacity="${done(4)?.95:.8}"/>`;
+      if(done(2)) s+=`<rect x="52" y="${y-3.5}" width="10" height="7" rx="1" fill="#D98E4A"/>`;
+    }
+  } else { s+=`<text x="170" y="70" fill="#6A717D" font-size="12" text-anchor="middle" font-family="IBM Plex Mono">nothing built yet — kit in preparation</text>`; }
+  // stage>=3: connector body on left
+  if(done(3)){
+    s+=`<rect x="14" y="14" width="40" height="102" rx="5" fill="#2A2E36" stroke="#3F4552"/>`;
+    for(let r=0;r<12;r++)for(let c=0;c<2;c++)
+      s+=`<rect x="${21+c*14}" y="${19+r*8}" width="9" height="5.5" rx="1" fill="${done(3)?'#101216':'#191C21'}" stroke="#3F4552" stroke-width=".5"/>`;
+  }
+  // stage>=4: branch (routed shape)
+  if(done(4)){
+    s+=`<path d="M230 62 L268 40 M230 62 L268 84" stroke="#EAE8E2" stroke-width="3" fill="none"/>`;
+    s+=`<path d="M230 62 L262 62" stroke="#E3B34F" stroke-width="3"/>`;
+  }
+  // stage>=5: tape bands + clips
+  if(done(5)){
+    for(const x of [150,180,210]) s+=`<rect x="${x}" y="52" width="12" height="20" rx="2" fill="#0D0F12" stroke="#343943"/>`;
+    s+=`<path d="M195 50 l0 -10 m-5 0 l10 0" stroke="#5CBE79" stroke-width="2.5"/>`;
+    s+=`<circle cx="262" cy="62" r="6" fill="none" stroke="#5CBE79" stroke-width="2.5"/>`;
+  }
+  if(done(6)) s+=`<text x="290" y="34" fill="#5CBE79" font-size="13" font-family="IBM Plex Mono">✓ test</text>`;
+  if(done(7)) s+=`<text x="290" y="52" fill="#5CBE79" font-size="13" font-family="IBM Plex Mono">✓ insp</text>`;
+  if(done(8)) s+=`<g><rect x="282" y="88" width="48" height="22" rx="3" fill="#EAE8E2"/><text x="306" y="103" fill="#14161A" font-size="9" text-anchor="middle" font-family="IBM Plex Mono">M24</text></g>`;
+  return s+'</svg>';
+}
+function selectProduct(){
+  setSel('product',null);
+  const part=(t,id,d)=>`<li><b>${id?T(id,t):t}</b> — ${d}</li>`;
+  insp.innerHTML=`
+   <div class="eyebrow">The product</div>
+   <h2>M-24 sealed connector harness</h2>
+   <p>A 24-${T('circuit','circuit')} ${T('harness','wiring assembly')} for industrial equipment. This is the golden sample — the finished reference unit. Every piece below gets added somewhere on the U.</p>
+   <div class="harness-fig">${productSVG()}</div>
+   <a class="glink" href="https://www.google.com/search?udm=2&q=sealed+connector+wire+harness+assembly" target="_blank" rel="noopener">what the real thing looks like ↗</a>
+   <h3>Every piece, and where it comes from</h3>
+   <ul>
+    ${part('Sealed connector body','connectorbody','the plastic housing with 24 numbered cavities. Terminals click in at station 3.')}
+    ${part('Cavity seals','cavityseal','tiny rubber rings that keep the connector waterproof — seated with each terminal at station 3, verified by the seal test at station 6.')}
+    ${part('Crimped terminals','terminal','the metal contacts squeezed onto every wire end at station 2. Bad crimps are the #1 defect.')}
+    ${part('24 circuits','circuit','24 wires, each cut and stripped to the variant recipe at station 1 (six drawn here for readability).')}
+    ${part('Harness tape','routing','wrapped around the routed bundle at station 5, after the shape is set on the pin board at station 4.')}
+    ${part('Retention clips','clip','snap the harness onto the machine frame — installed at station 5, checked (imperfectly) at station 7.')}
+    ${part('Grommet','grommet','protects the bundle where it passes through sheet metal — installed at station 5.')}
+    ${part('Breakouts','','where the trunk splits into branches, set by the pin-board layout at station 4.')}
+    ${part('Variant label','variant','printed and applied at station 8. Wrong label = the defect the customer finds.')}
+   </ul>
+   <p style="color:var(--muted);font-size:12.5px">Tip: click any moving copper chip on the floor to see this same drawing mid-build — only the pieces added so far.</p>`;
+  wireTerms();
+}
+function selectDataSource(id){
+  const s=DATASOURCES.find(x=>x.id===id);
+  setSel('data',id);
+  insp.innerHTML=`
+   <div class="eyebrow">What data exists today · ${s.where}</div>
+   <h2>${s.name}</h2><p>${s.desc}</p>
+   <h3>All five sources that exist</h3>
+   <ul>${DATASOURCES.map(x=>`<li${x.id===id?' style="color:var(--ink)"':''}>${x.name} <span class="chip cap">${x.where}</span></li>`).join('')}</ul>
+   <h3>What does NOT exist</h3>
+   <ul>${DATAGAPS.map(g=>`<li><span class="chip inv">gap</span> ${g}</li>`).join('')}</ul>
+   <div class="note"><b>That gap is the case</b> — the class challenge, verbatim: make invisible manual assembly work visible enough to improve quality, training, staffing and flow, without disrupting operators or turning the system into individual surveillance.</div>`;
+  wireTerms();
+}
+function showDataOverviewPanel(){
+  selectDataSource('tester');
+}
+function showDaySummary(){
+  const fpy=stats.done?Math.round(stats.fpyPass/stats.done*1000)/10:0;
+  insp.innerHTML=`
+   <div class="eyebrow">End of day</div>
+   <h2>Two shifts, one report each — and everything else lost</h2>
+   <div class="kv"><span>Shift 1 good units</span><b>${stats.s1good??'—'} / 200</b></div>
+   <div class="kv"><span>Shift 2 good units</span><b>${stats.good} / 200</b></div>
+   <div class="kv"><span>Day first-pass yield</span><b>${fpy}%</b></div>
+   <div class="kv"><span>Scrapped</span><b>${stats.scrap}</b></div>
+   <div class="kv"><span>Escaped to customer</span><b>${stats.escapes}</b></div>
+   <p style="margin-top:12px">Notice the shortfall against the 200-unit target: with a 4–5 min bottleneck at station 3, ~100–110 good units per 480-min shift is all the physics allows. The case's "takt ≈ 4 min" and "target ≈ 200/shift" can't both be true — flag it; the handout asks you to mark what doesn't ring true.</p>
+   <p>Of everything you just watched — queues growing at the bottleneck, the new hire’s defect rate, rework loops, rotations, waits — the plant’s systems kept: <b>two shift reports, the tester log, and a stack of paper tags</b>.</p>
+   <button class="linkrow" id="openFullSum"><b>Open the full day summary →</b><br><span style="color:var(--muted);font-size:12px">every station, person, defect and event — the record the plant never gets</span></button>
+   <p style="margin-top:10px">Hit <b>Reset</b> to run another day, or use the <b>Data layer</b> and click through stations to build your team’s failure-mode map.</p>`;
+  $('openFullSum').addEventListener('click',openSummary);
+  wireTerms();
+}
+
+/* ---------- summary ---------- */
+const fmtDur=m=>m<60?Math.round(m)+' min':Math.floor(m/60)+'h '+String(Math.round(m%60)).padStart(2,'0')+'m';
+const pc=(a,b)=>b>0?Math.round(a/b*100)+'%':'—';
+const fpyOf=(pass,done)=>done>0?(pass/done*100).toFixed(1)+'%':'—';
+function openSummary(){
+  $('sumTitle').textContent = simMin>=DAY_MIN ? 'End of day — the full record'
+    : 'Live summary · '+fmtClock(simMin)+' · Shift '+stats.shift;
+  $('sumBody').innerHTML=buildSummary();
+  $('summary').classList.add('open');
+}
+function buildSummary(){
+  const ev=track.events, snaps=track.snaps;
+  const goodTotal=snaps.reduce((a,s)=>a+s.good,0)+stats.good;
+  const played=track.station.reduce((a,s)=>Math.max(a,s.busy+s.idle+s.blocked),0);
+  if(played<1) return `<p>Nothing to summarize yet — press <b>Play</b> and let the cell run, then come back.</p>`;
+  const card=(v,l)=>`<div class="sumcard"><b>${v}</b><span>${l}</span></div>`;
+  const chip=t=>t==='cap'?'<span class="chip cap">captured</span>':t==='lag'?'<span class="chip cap">capt · late</span>':'<span class="chip inv">invisible</span>';
+
+  /* shifts */
+  const s0=snaps[0];
+  const cum={good:stats.good,done:stats.done,fpyPass:stats.fpyPass,scrap:stats.scrap,
+             esc:stats.escapes,fail:ev.fail,reject:ev.reject};
+  const rows=[];
+  if(s0) rows.push(['Shift 1',s0.good,fpyOf(s0.fpyPass,s0.done),s0.fail,s0.reject,s0.scrap,s0.esc]);
+  const d=s0?{good:cum.good,done:cum.done-s0.done,fpyPass:cum.fpyPass-s0.fpyPass,
+              fail:cum.fail-s0.fail,reject:cum.reject-s0.reject,scrap:cum.scrap-s0.scrap,
+              esc:cum.esc-s0.esc}
+            :{good:cum.good,done:cum.done,fpyPass:cum.fpyPass,fail:cum.fail,
+              reject:cum.reject,scrap:cum.scrap,esc:cum.esc};
+  rows.push([(s0?'Shift 2':'Shift 1')+(simMin>=DAY_MIN?'':' (so far)'),
+             d.good,fpyOf(d.fpyPass,d.done),d.fail,d.reject,d.scrap,d.esc]);
+
+  /* stations */
+  const VIS=['none','none','none','none','none','pass/fail + code','paper tags','shift total only'];
+  const stRows=track.station.map((s,i)=>{
+    const tot=s.busy+s.idle+s.blocked||1;
+    const hot=i===2;
+    return `<tr${hot?' class="hot"':''}><td>S${i+1} ${STATIONS[i].name}</td>
+      <td>${STATIONS[i].cycTxt.split('·')[0].trim()}</td>
+      <td>${s.units?(s.cycSum/s.units).toFixed(1)+' min':'—'}</td>
+      <td>${s.units}</td><td>${pc(s.busy,tot)}</td><td>${pc(s.blocked,tot)}</td>
+      <td>${pc(s.idle,tot)}</td><td>${s.qMax}</td><td>${s.born}</td><td>${s.caught||'—'}</td>
+      <td>${VIS[i]==='none'?'<span class="chip inv">none</span>':'<span class="chip cap">'+VIS[i]+'</span>'}</td></tr>`;
+  }).join('');
+
+  /* defects */
+  const dRows=Object.entries(DEFECTS).map(([k,def])=>{
+    const t=track.defects[k];
+    const latent=Math.max(0,t.born-t.test-t.vis-t.esc);
+    return `<tr><td>#${def.rank} ${def.name}</td><td>S${def.at}</td><td>${t.born}</td>
+      <td>${t.test}</td><td>${t.vis}</td><td>${t.scrapped}</td><td>${t.esc}</td><td>${latent}</td></tr>`;
+  }).join('');
+
+  /* people */
+  const opsBorn=people.filter(p=>p.role==='operator'&&!p.newhire)
+                      .map(p=>track.people[p.label].born);
+  const avgBorn=opsBorn.length?opsBorn.reduce((a,b)=>a+b,0)/opsBorn.length:0;
+  const nh=people.find(p=>p.newhire), nhT=nh?track.people[nh.label]:null;
+  const ratio=nhT&&avgBorn>0?(nhT.born/avgBorn).toFixed(1):null;
+  const pRows=people.map(p=>{
+    const t=track.people[p.label];
+    const stns=[...t.stations].sort((a,b)=>a-b).map(n=>'S'+n).join(' ')||'—';
+    let note='';
+    if(p.role==='operator') note=p.newhire?`new hire — ${ratio?ratio+'× the crew’s defect rate':'in training'}`:'rotates 1–5';
+    if(p.role==='qtech') note=`caught ${track.station[5].caught} at test, ${track.station[6].caught} at inspection`;
+    if(p.role==='lead') note=`${ev.reports} shift report${ev.reports===1?'':'s'} written · patrols all day`;
+    if(p.role==='trainer') note=`${ev.trainerVisits} visit${ev.trainerVisits===1?'':'s'}, ${ev.signoffs} sign-off${ev.signoffs===1?'':'s'}`;
+    if(p.role==='supervisor') note=`${ev.walkthroughs} walk-through${ev.walkthroughs===1?'':'s'} (covers two cells)`;
+    if(p.role==='engineer') note=`${ev.mePulls} pull${ev.mePulls===1?'':'s'} to the cell — scrap-driven`;
+    return `<tr><td>${p.label} · ${ROLES[p.role].title}</td><td>${stns}</td>
+      <td>${t.units||'—'}</td><td>${t.born||'—'}</td><td style="white-space:normal;min-width:180px">${note}</td></tr>`;
+  }).join('');
+
+  /* feed rollup */
+  const roll=[
+    ['Tester results logged (pass)',ev.pass,'cap'],
+    ['Tester FAILs with circuit code',ev.fail,'cap'],
+    ['Inspection rejects → paper rework tag',ev.reject,'cap'],
+    ['Scrap tickets (keyed in ~3 days late)',ev.scrapT,'lag'],
+    ['Trainer sign-offs → training matrix (month-end)',ev.signoffs,'lag'],
+    ['Defective units shipped → future complaint',stats.escapes,'lag'],
+    ['Shift reports written from memory',ev.reports,'cap'],
+    ['Rework loops completed at the bench',ev.rework,'inv'],
+    ['Operator rotations (who ran what: unknown)',ev.rotations,'inv'],
+    ['Trainer coaching visits',ev.trainerVisits,'inv'],
+    ['Supervisor walk-throughs',ev.walkthroughs,'inv'],
+    ['Engineer pulls to the cell',ev.mePulls,'inv'],
+    ['Station cycles completed at S1–S5 (all unrecorded)',
+      track.station.slice(0,5).reduce((a,s)=>a+s.units,0),'inv'],
+  ].map(([l,n,t])=>`<tr><td style="white-space:normal">${l}</td><td>${n}</td><td>${chip(t)}</td></tr>`).join('');
+  // share of floor activity with no trace: count real happenings, not feed lines
+  const s15=track.station.slice(0,5).reduce((a,s)=>a+s.units,0);
+  const invActs=s15+ev.rework+ev.rotations+ev.trainerVisits+ev.walkthroughs+ev.mePulls;
+  const capActs=ev.pass+ev.fail+ev.reject+ev.scrapT+ev.signoffs+stats.escapes+ev.reports;
+  const invPct=pc(invActs,invActs+capActs);
+
+  const b=track.bench;
+  return `
+   <h3>Headline</h3>
+   <div class="sumgrid">
+     ${card(fmtDur(simMin),'elapsed')}${card(track.kits,'units started')}
+     ${card(goodTotal,'good units')}${card(fpyOf(stats.fpyPass,stats.done),'day fpy')}
+     ${card(stats.scrap,'scrapped')}${card(stats.escapes,'escapes')}
+     ${card(units.filter(u=>u.state!=='dead').length,'wip now')}
+     ${card(ev.captured+ev.invisible,'events observed')}
+   </div>
+   <p style="margin-top:8px">Takt says ${Math.floor(simMin/4)} units should have left by now; ${ev.ship} did.
+   Station 3's 4–5 min cycle caps the line near 1 unit / 4.5 min — the takt-vs-target gap the case buries.</p>
+
+   <h3>Shift comparison</h3>
+   <div class="twrap"><table class="sumtable">
+     <tr><th>Shift</th><th>Good units</th><th>FPY</th><th>Test fails</th><th>Insp. rejects</th><th>Scrap</th><th>Escapes</th></tr>
+     ${rows.map(r=>`<tr>${r.map((c,k)=>`<td>${c}</td>`).join('')}</tr>`).join('')}
+   </table></div>
+
+   <h3>Stations — the numbers nobody has</h3>
+   <div class="twrap"><table class="sumtable">
+     <tr><th>Station</th><th>Stated cycle</th><th>Actual avg</th><th>Units</th><th>Working</th><th>Blocked</th><th>Waiting</th><th>Max queue</th><th>Defects born</th><th>Caught</th><th>In today's data?</th></tr>
+     ${stRows}
+   </table></div>
+   <p style="font-size:12px;color:var(--muted)">Amber row = the bottleneck. "Blocked" = finished a unit but downstream was full; "waiting" = starved for work. Both are pure lost capacity, and both are invisible today.</p>
+
+   <h3>Defect ledger — born vs caught vs escaped</h3>
+   <div class="twrap"><table class="sumtable">
+     <tr><th>Category</th><th>Born at</th><th>Born</th><th>Caught @ test</th><th>Caught @ insp.</th><th>Scrapped</th><th>Escaped</th><th>Still on the line</th></tr>
+     ${dRows}
+   </table></div>
+
+   <h3>Rework bench</h3>
+   <p>${b.in} unit${b.in===1?'':'s'} landed here · ${b.out} reworked and re-checked · ${b.scrap} scrapped ·
+   avg dwell ${b.in?(b.dwellSum/b.in).toFixed(1):'—'} min · <b>${fmtDur(b.dwellSum)}</b> of capacity burned
+   (≈ ${Math.round(b.dwellSum/4)} takt cycles). The only artifacts: paper tags, keyed in days later.</p>
+
+   <h3>Line lead desk</h3>
+   <p>${ev.reports} shift report${ev.reports===1?'':'s'} written — units, downtime notes, headcount, from memory.
+   Not in any report: every queue you watched grow, ${ev.rotations} rotation${ev.rotations===1?'':'s'},
+   who ran which station, ${ev.rework} rework loop${ev.rework===1?'':'s'}, and every minute of blocked/waiting time above.</p>
+
+   <h3>People — what each role did & left behind</h3>
+   <div class="twrap"><table class="sumtable">
+     <tr><th>Who</th><th>Stations</th><th>Units worked</th><th>Defects at their station</th><th>Notes</th></tr>
+     ${pRows}
+   </table></div>
+   ${ratio?`<div class="note"><b>The buried linkage:</b> the new hire's stations produced ${ratio}× the crew-average defects. The training matrix knows who's new; the tester log knows what failed. No system connects them — gap #3 in the case, sitting right here in the numbers.</div>`:''}
+
+   <h3>Floor activity, rolled up (${invActs+capActs} things happened)</h3>
+   <div class="twrap"><table class="sumtable">
+     <tr><th>What happened</th><th>Count</th><th>Trace today</th></tr>
+     ${roll}
+   </table></div>
+   <div class="note" style="margin-top:12px"><b>${invPct} of everything that happened left no trace.</b>
+   Today's plant would keep: the tester log, ${ev.reports} shift report${ev.reports===1?'':'s'}, and a stack of paper tags.
+   Every other number on this page exists only because this simulation was watching — which is precisely the system the studio is asking you to design.</div>`;
+}
+$('sumBtn').addEventListener('click',openSummary);
+$('sumRefresh').addEventListener('click',openSummary);
+$('sumClose').addEventListener('click',()=>$('summary').classList.remove('open'));
+$('summary').addEventListener('click',e=>{if(e.target.id==='summary')$('summary').classList.remove('open');});
+
+/* ---------- glossary ---------- */
+function buildGlossary(){
+  const list=$('glist');
+  list.innerHTML=GLOSSARY.map(([id,term,cat,def])=>
+    `<div class="gentry" id="g-${id}"><b>${term}<small>${cat}</small></b><p>${def}</p>
+     ${ILLUS[id]?`<div class="gillus">${ILLUS[id]}</div>`:''}
+     ${LINKS[id]?`<a class="glink" href="${LINKS[id][1]}" target="_blank" rel="noopener">${LINKS[id][0]} ↗</a>`:''}
+    </div>`).join('');
+}
+function openGlossary(focusId){
+  $('glossary').classList.add('open');
+  document.querySelectorAll('.gentry.hl').forEach(e=>e.classList.remove('hl'));
+  if(focusId){
+    const e=$('g-'+focusId);
+    if(e){e.classList.add('hl');
+      const list=$('glist');
+      list.scrollTop=Math.max(0,e.offsetTop-list.offsetTop-list.clientHeight/2+e.clientHeight/2);}
+  }
+}
+$('gsearch').addEventListener('input',e=>{
+  const q=e.target.value.toLowerCase();
+  GLOSSARY.forEach(([id,term,cat,def])=>{
+    $('g-'+id).style.display=(term+cat+def).toLowerCase().includes(q)?'':'none';});
+});
+$('glossBtn').addEventListener('click',()=>openGlossary());
+$('glossClose').addEventListener('click',()=>$('glossary').classList.remove('open'));
+
+/* ---------- feed & HUD ---------- */
+function logEv(txt,tag,important,fail){
+  feed.push({t:simMin,txt,tag,fail});
+  if(track) track.events[tag.startsWith('cap')?'captured':'invisible']++;
+  const f=$('feed');
+  const d=document.createElement('div');
+  d.className='ev '+tag+(fail?' fail':'');
+  d.innerHTML=`<time>${fmtClock(simMin)}</time><span class="tag">${tag.startsWith('cap')?(tag==='cap lag'?'● capt (late)':'● captured'):'● invisible'}</span><span class="txt">${txt}</span>`;
+  f.prepend(d);
+  while(f.children.length>60) f.lastChild.remove();
+}
+function updateHUD(){
+  $('goodV').textContent=stats.good;
+  const fpy=stats.done?(stats.fpyPass/stats.done*100):null;
+  const fv=$('fpyV');
+  fv.textContent=fpy==null?'—':fpy.toFixed(1)+'%';
+  fv.className=fpy==null?'':(fpy>=92?'good':'bad');
+  $('wipV').textContent=units.filter(u=>u.state!=='dead').length;
+  $('scrapV').textContent=stats.scrap;
+  $('escV').textContent=stats.escapes;
+  $('clockV').textContent=fmtClock(simMin);
+  $('shiftV').textContent='· Shift '+stats.shift;
+}
+
+/* ---------- controls ---------- */
+const playBtn=$('playBtn');
+playBtn.addEventListener('click',togglePlay);
+function togglePlay(){
+  if(simMin>=DAY_MIN) return;
+  playing=!playing; playBtn.textContent=playing?'❚❚ Pause':'▶ Play';
+}
+document.addEventListener('keydown',e=>{
+  if(e.key===' '&&!['INPUT','BUTTON'].includes(document.activeElement.tagName)){e.preventDefault();togglePlay();}
+  if(e.key==='Escape'){$('glossary').classList.remove('open');$('summary').classList.remove('open');}
+});
+document.querySelectorAll('[data-spd]').forEach(b=>b.addEventListener('click',()=>{
+  speed=+b.dataset.spd;
+  document.querySelectorAll('[data-spd]').forEach(x=>x.classList.toggle('on',x===b));
+}));
+$('resetBtn').addEventListener('click',()=>{playing=false;playBtn.textContent='▶ Play';resetSim();});
+$('dataBtn').addEventListener('click',()=>{
+  dataLayer=!dataLayer;
+  document.getElementById('app').classList.toggle('dl',dataLayer);
+  $('dataBtn').classList.toggle('on',dataLayer);
+  if(dataLayer) showDataOverviewPanel(); else showOverview();
+});
+$('xrayBtn').addEventListener('click',()=>{
+  xray=!xray; $('xrayBtn').classList.toggle('on',xray);
+  $('xrayBtn').textContent=xray?'Reality view ON':'Reality view';
+  logEv(xray?'REALITY VIEW: red-ringed units carry defects no system has detected yet':'Back to plant view — you now see only what today’s data shows','inv');
+  drawUnits();
+});
+floor.addEventListener('click',e=>{ if(e.target===floor) showOverview(); });
+
+/* ---------- main loop ---------- */
+let last=performance.now();
+function loop(now){
+  const realDt=Math.min(.1,(now-last)/1000); last=now;
+  if(playing&&simMin<DAY_MIN){
+    const dtSim=realDt*speed; // 1 sim-minute per real second at 1×
+    const prev=simMin; simMin=Math.min(DAY_MIN,simMin+dtSim);
+    stepStations(dtSim); stepTravel(dtSim); stepBench(dtSim); stepPeople(dtSim,realDt);
+    stepShift(prev,simMin);
+    updateHUD();
+  } else {
+    stepPeopleIdle(realDt);
+  }
+  drawUnits(); drawPeople(); drawStations();
+  requestAnimationFrame(loop);
+}
+function stepPeopleIdle(realDt){ for(const p of people) p.phase+=realDt*3; }
+
+/* ---------- boot ---------- */
+buildGlossary();
+resetSim();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
